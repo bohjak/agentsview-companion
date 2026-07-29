@@ -12,6 +12,8 @@ pre-release (`0.x`) and breaking changes may occur between any two commits.
 
 ### Added
 
+- `scripts/backfill-claude-code.ts` can dry-run or apply reconciliation of
+  historical Claude Code usage from main and Task-tool subagent transcripts.
 - `@token-tally/queries` shared read-only query package: single source of truth
   for all TypeScript aggregation logic (models, sessions, repos, tools, daily
   cost). Both `clients/web-explorer` and `clients/pi-usage-command` now
