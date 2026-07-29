@@ -40,17 +40,20 @@ export type SessionState = {
   currentHarnessTurnId: string | null;
 
   /**
-   * Absolute path to the transcript file this offset is indexed against.
-   * When the incoming transcript_path differs, drain.ts resets the offset to 0.
-   * Null on initial state (no drain has occurred yet).
+   * Number of lines consumed so far from each transcript JSONL file this
+   * session has drained, keyed by the file's absolute path. A session can
+   * have multiple entries here: one for the main transcript plus one per
+   * discovered subagent (Task-tool) transcript under its sidecar
+   * `<id>/subagents/agent-*.jsonl` directory. Each entry is used as
+   * `fromLine` for its own file to avoid re-processing already-recorded
+   * entries. A path with no entry yet (never drained) is treated as offset 0.
+   *
+   * Replaces the old single `transcriptPath`/`transcriptOffset` pair, which
+   * could only track one file and could not represent subagent transcripts
+   * at all. `readSessionState` transparently migrates state files written
+   * in that old shape — see the migration logic below.
    */
-  transcriptPath: string | null;
-
-  /**
-   * Number of lines consumed from the transcript JSONL so far.
-   * Used as `fromLine` to avoid re-processing already-recorded entries.
-   */
-  transcriptOffset: number;
+  transcriptOffsets: Record<string, number>;
 
   /** Most recently observed model ID (carried across turns for context). */
   lastModelId: string | null;
@@ -72,6 +75,57 @@ export type SessionState = {
 };
 
 // ---------------------------------------------------------------------------
+// Migration (old single-offset shape -> new per-file offsets map)
+// ---------------------------------------------------------------------------
+
+/**
+ * On-disk shape as it may actually appear before migration.
+ *
+ * State files written before this change used a single
+ * `transcriptPath: string | null` / `transcriptOffset: number` pair instead
+ * of `transcriptOffsets`. Both legacy fields are optional here purely to
+ * describe that older shape for migration purposes — `SessionState` itself
+ * (the type used everywhere else) no longer has them.
+ */
+type PersistedSessionState = Omit<SessionState, "transcriptOffsets"> & {
+  /** Present when the file already uses the new per-file offsets map. */
+  transcriptOffsets?: Record<string, number>;
+  /** Legacy field, present only in pre-migration state files. */
+  transcriptPath?: string | null;
+  /** Legacy field, present only in pre-migration state files. */
+  transcriptOffset?: number;
+};
+
+/**
+ * Upgrade a possibly-old-shape parsed state file into the current
+ * `SessionState` shape.
+ *
+ * - New-shape files (already have `transcriptOffsets`) pass through
+ *   unchanged, aside from dropping any stray legacy fields.
+ * - Old-shape files (`transcriptOffsets` absent, `transcriptPath` a
+ *   non-null string, `transcriptOffset` a number) are seeded with a single
+ *   `{ [transcriptPath]: transcriptOffset }` entry — preserving the read
+ *   position so the next drain does not re-scan (and re-count) the whole
+ *   transcript from line 0.
+ * - Old-shape files with `transcriptPath: null` (no drain had occurred yet)
+ *   migrate to an empty map — there is nothing to seed.
+ */
+function migrateSessionState(raw: PersistedSessionState): SessionState {
+  const { transcriptPath, transcriptOffset, transcriptOffsets, ...rest } = raw;
+
+  const offsets: Record<string, number> =
+    transcriptOffsets !== undefined
+      ? transcriptOffsets
+      : typeof transcriptPath === "string" &&
+          transcriptPath.length > 0 &&
+          typeof transcriptOffset === "number"
+        ? { [transcriptPath]: transcriptOffset }
+        : {};
+
+  return { ...rest, transcriptOffsets: offsets };
+}
+
+// ---------------------------------------------------------------------------
 // Read
 // ---------------------------------------------------------------------------
 
@@ -81,14 +135,20 @@ export type SessionState = {
  * Returns null when:
  * - The file does not exist (ENOENT) — normal for the first hook of a session.
  * - The file exists but contains invalid JSON — logs a warning and returns null.
+ *
+ * Transparently migrates state files written in the old single
+ * transcriptPath/transcriptOffset shape (see `migrateSessionState`) so
+ * upgrading the writer never resets an in-progress session's read position.
  */
 export async function readSessionState(
   sessionId: string,
 ): Promise<SessionState | null> {
-  return readJsonState<SessionState>(
+  const raw = await readJsonState<PersistedSessionState>(
     sessionStateFile(sessionId),
     "[claude-code-writer]",
   );
+  if (raw === null) return null;
+  return migrateSessionState(raw);
 }
 
 // ---------------------------------------------------------------------------

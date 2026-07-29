@@ -3,4 +3,4 @@
  * Used for cost provenance tracing: (harness_id, integration_version)
  * identifies which writer build computed a cost.
  */
-export const INTEGRATION_VERSION = "0.1.0";
+export const INTEGRATION_VERSION = "0.1.1";

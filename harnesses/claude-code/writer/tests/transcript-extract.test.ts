@@ -154,3 +154,113 @@ test("entry with both type and role set to assistant is accepted", () => {
   const result = extractAssistantUsage(entry);
   assert.ok(result !== null);
 });
+
+// ---------------------------------------------------------------------------
+// Dedup key: message.id vs. uuid (T1 fix)
+//
+// Claude Code writes one JSONL line per content block (thinking/text/
+// tool_use) for a single assistant API response. Each line has a distinct
+// uuid but shares the same Anthropic message.id. harnessMessageId must
+// prefer message.id so the store's UNIQUE (harness_id, harness_message_id)
+// upsert collapses those split lines into one row, falling back to uuid only
+// when message.id is absent/empty.
+// ---------------------------------------------------------------------------
+
+test("message.id present alongside uuid — harnessMessageId prefers message.id", () => {
+  const entry = assistantEntry({
+    uuid: "line-uuid-001",
+    message: {
+      id: "msg_shared_api_response",
+      model: "claude-opus-4-5",
+      usage: {
+        input_tokens: 100,
+        output_tokens: 50,
+        cache_read_input_tokens: 20,
+        cache_creation_input_tokens: 10,
+      },
+    },
+  });
+  const result = extractAssistantUsage(entry);
+  assert.ok(result !== null);
+  assert.equal(result.harnessMessageId, "msg_shared_api_response");
+});
+
+test("message.id absent — harnessMessageId falls back to uuid", () => {
+  // Default assistantEntry() shape has no message.id field at all.
+  const entry = assistantEntry({ uuid: "line-uuid-fallback" });
+  const result = extractAssistantUsage(entry);
+  assert.ok(result !== null);
+  assert.equal(result.harnessMessageId, "line-uuid-fallback");
+});
+
+test("message.id present but empty string — harnessMessageId falls back to uuid", () => {
+  const entry = assistantEntry({
+    uuid: "line-uuid-empty-msgid",
+    message: {
+      id: "",
+      model: "claude-opus-4-5",
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+    },
+  });
+  const result = extractAssistantUsage(entry);
+  assert.ok(result !== null);
+  assert.equal(result.harnessMessageId, "line-uuid-empty-msgid");
+});
+
+test("message.id present, uuid absent — returns non-null keyed by message.id", () => {
+  // No uuid field at all — previously this hard-required uuid and would have
+  // returned null, incorrectly dropping an entry that carries a usable id.
+  const entry = {
+    type: "assistant",
+    timestamp: "2024-01-15T10:00:00.000Z",
+    message: {
+      id: "msg_no_uuid_case",
+      model: "claude-opus-4-5",
+      usage: {
+        input_tokens: 30,
+        output_tokens: 15,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+    },
+  };
+  const result = extractAssistantUsage(entry);
+  assert.ok(result !== null);
+  assert.equal(result.harnessMessageId, "msg_no_uuid_case");
+  assert.equal(result.inputTokens, 30);
+  assert.equal(result.outputTokens, 15);
+});
+
+test("neither message.id nor uuid present — returns null", () => {
+  const entry = {
+    type: "assistant",
+    timestamp: "2024-01-15T10:00:00.000Z",
+    message: {
+      model: "claude-opus-4-5",
+      usage: { input_tokens: 30, output_tokens: 15 },
+    },
+  };
+  assert.equal(extractAssistantUsage(entry), null);
+});
+
+test("message.id and uuid both present as empty strings — returns null", () => {
+  const entry = assistantEntry({
+    uuid: "",
+    message: {
+      id: "",
+      model: "claude-opus-4-5",
+      usage: {
+        input_tokens: 1,
+        output_tokens: 1,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+    },
+  });
+  assert.equal(extractAssistantUsage(entry), null);
+});

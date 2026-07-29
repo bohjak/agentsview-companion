@@ -3,7 +3,8 @@
  *
  * Fires once when a Claude Code session terminates (normal exit, /clear, or
  * process kill with SIGTERM). Responsibilities:
- *   1. Drain any remaining transcript entries into llm_messages.
+ *   1. Drain any remaining transcript entries (main + subagent sidecars)
+ *      into llm_messages.
  *   2. Close the sessions row by setting ended_at.
  *   3. Delete the on-disk session state file (no longer needed).
  *
@@ -20,7 +21,7 @@ import {
   deleteSessionState,
   type SessionState,
 } from "../state/session-state.js";
-import { drainTranscript } from "../transcript/drain.js";
+import { drainSessionTranscripts } from "../transcript/drain.js";
 import { INTEGRATION_VERSION } from "../version.js";
 
 // ---------------------------------------------------------------------------
@@ -72,8 +73,7 @@ export async function handle(
       turnIndex: 0,
       currentTurnId: null,
       currentHarnessTurnId: null,
-      transcriptPath: null,
-      transcriptOffset: 0, // read from the very beginning
+      transcriptOffsets: {}, // no entries yet — read from the very beginning
       lastModelId: null,
       lastProvider: null,
       subscriptionId: null,
@@ -82,17 +82,17 @@ export async function handle(
   }
 
   // ── 2. Drain remaining transcript entries ────────────────────────────────
-  // drainTranscript returns an updated copy; we persist it only temporarily
-  // because we are about to delete the state file anyway. The intermediate
-  // writeSessionState inside drainTranscript is handled by the caller
-  // contract (drain does NOT persist state — we do it after).
-  const updatedState = await drainTranscript(
+  // drainSessionTranscripts returns an updated copy (main transcript plus
+  // any discovered subagent sidecars). The drain helper deliberately does
+  // not persist state; we write the updated offsets below before deleting
+  // the state file.
+  const updatedState = await drainSessionTranscripts(
     writer,
     state,
     payload.transcript_path,
   );
 
-  // Persist updated offset before deleting, so a crash between drain and
+  // Persist updated offsets before deleting, so a crash between drain and
   // delete does not cause duplicate records on any hypothetical retry.
   await writeSessionState(payload.session_id, updatedState);
 

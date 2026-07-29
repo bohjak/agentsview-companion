@@ -47,6 +47,25 @@ pre-release (`0.x`) and breaking changes may occur between any two commits.
 
 ### Fixed
 
+- Claude Code writer: assistant usage is now deduped by the Anthropic
+  `message.id` instead of the transcript entry's own per-line `uuid`. Claude
+  Code writes one JSONL line per content block (thinking/text/tool_use) for
+  a single assistant API response, so the old `uuid`-keyed idempotency check
+  never collapsed these lines and usage was summed 2-4x per real API call.
+  `harnessMessageId` now prefers `message.id`, falling back to `uuid` only
+  when `message.id` is absent (older transcript formats or non-assistant
+  entries).
+- Claude Code writer: Task-tool subagent transcripts, written to sidecar
+  `<session-id>/subagents/agent-*.jsonl` files alongside the main session
+  transcript, are now discovered and drained. Previously these files were
+  never read at all, so subagent token/cost usage was silently dropped from
+  every session that used the Task tool.
+- Claude Code writer: transcript read offsets are now tracked per-file
+  (`transcriptOffsets: Record<path, offset>`) instead of a single shared
+  offset. This also fixes a latent hazard where a main/subagent transcript
+  path flip-flop under the old single-offset model could reset the shared
+  offset to 0, triggering a full rescan that re-attributed already-recorded
+  historical entries to the current turn.
 - Hook commands registered with absolute symlink paths instead of bare names;
   `doctor.sh` and `uninstall.sh` match both old bare-name entries and new
   absolute-path entries so existing installs converge correctly on next

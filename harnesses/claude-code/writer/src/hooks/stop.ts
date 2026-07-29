@@ -3,7 +3,8 @@
  *
  * Fires when the main agent loop has finished responding to a user turn.
  * Responsibilities:
- *   1. Drain any remaining transcript entries into llm_messages.
+ *   1. Drain any remaining transcript entries (main + subagent sidecars)
+ *      into llm_messages.
  *   2. Close the currently open turn by setting its endedAt timestamp.
  *   3. Clear any in-flight tool entries (defensive — stale after Stop).
  *   4. Persist updated state.
@@ -17,7 +18,7 @@ import {
   readSessionState,
   writeSessionState,
 } from "../state/session-state.js";
-import { drainTranscript } from "../transcript/drain.js";
+import { drainSessionTranscripts } from "../transcript/drain.js";
 
 // ---------------------------------------------------------------------------
 // Handler
@@ -44,8 +45,8 @@ export async function handle(
     return;
   }
 
-  // ── 1. Drain transcript ─────────────────────────────────────────────────
-  state = await drainTranscript(writer, state, payload.transcript_path);
+  // ── 1. Drain transcript(s) ─────────────────────────────────────────────
+  state = await drainSessionTranscripts(writer, state, payload.transcript_path);
 
   // ── 2. Close current turn ───────────────────────────────────────────────
   // Both IDs are required — if either is null the turn was never opened and
