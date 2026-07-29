@@ -17,8 +17,11 @@
  */
 
 import Database from "better-sqlite3";
-import { statSync } from "fs";
+import { homedir } from "os";
+import { basename, dirname, extname, join } from "path";
+import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { readSchemaCompatibility } from "./connection";
+import { computeCostMicros } from "./pricing/index";
 
 // ---------------------------------------------------------------------------
 // Finding types
@@ -105,6 +108,11 @@ const STALE_SESSION_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 // always cover the full table; only detail samples are capped.
 const DUPLICATE_SAMPLE_SIZE = 5;
 
+// Claude Code stores transcripts under ~/.claude/projects by default. Tests
+// and unusual installs can override this without changing runDoctor's public
+// API.
+const CLAUDE_PROJECTS_DIR_ENV = "TOKEN_TALLY_CLAUDE_PROJECTS_DIR";
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -151,10 +159,13 @@ export function runDoctor(dbPath: string): DoctorReport {
     // 5. Semantic duplicate records.
     findings.push(...checkDuplicateRecords(db));
 
-    // 6. Stale sessions.
+    // 6. Claude Code transcripts vs DB consistency.
+    findings.push(checkClaudeCodeTranscriptConsistency(db));
+
+    // 7. Stale sessions.
     findings.push(...checkStaleSessions(db, generatedAt));
 
-    // 7. Raw events suspicious key scan.
+    // 8. Raw events suspicious key scan.
     findings.push(...checkRawEventsSensitiveKeys(db));
   } finally {
     db.close();
@@ -722,6 +733,314 @@ function checkDuplicateToolCalls(db: Database.Database): Finding {
       sample,
     },
   };
+}
+
+type ClaudeCodeSessionRow = {
+  id: string;
+  harnessSessionId: string;
+  startedAt: number;
+};
+
+type ClaudeCodeUsage = {
+  harnessMessageId: string;
+  modelId: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  legacyCostUSD: number | null;
+};
+
+type ClaudeCodeTotals = {
+  count: number;
+  tokens: number;
+  costMicros: number;
+};
+
+function checkClaudeCodeTranscriptConsistency(db: Database.Database): Finding {
+  if (!tableExists(db, "sessions") || !tableExists(db, "llm_messages")) {
+    return {
+      code: "claude_code_transcript_consistency_skipped",
+      severity: "warning",
+      message: "Claude Code transcript consistency check skipped because required tables are missing.",
+    };
+  }
+
+  const sessions = db
+    .prepare(
+      `SELECT id, harness_session_id AS harnessSessionId, started_at AS startedAt
+       FROM sessions
+       WHERE harness_id = 'claude-code'
+       ORDER BY started_at ASC`,
+    )
+    .all() as ClaudeCodeSessionRow[];
+
+  if (sessions.length === 0) {
+    return {
+      code: "claude_code_transcript_consistency_ok",
+      severity: "ok",
+      message: "No Claude Code sessions found; transcript consistency check not needed.",
+    };
+  }
+
+  const projectsDir = claudeProjectsDir();
+  if (!existsSync(projectsDir)) {
+    return {
+      code: "claude_code_transcript_consistency_skipped",
+      severity: "warning",
+      message:
+        `Claude Code transcript consistency check skipped because ${projectsDir} does not exist.`,
+      detail: { projectsDir, sessionCount: sessions.length },
+    };
+  }
+
+  const expectedByMessageId = new Map<string, ClaudeCodeUsage>();
+  const locatedSessionIds: string[] = [];
+  const missingHarnessSessionIds: string[] = [];
+
+  for (const session of sessions) {
+    const mainTranscriptPath = findClaudeMainTranscriptPath(projectsDir, session.harnessSessionId);
+    if (mainTranscriptPath === null) {
+      missingHarnessSessionIds.push(session.harnessSessionId);
+      continue;
+    }
+
+    locatedSessionIds.push(session.id);
+    for (const usage of readClaudeCodeUsages(mainTranscriptPath)) {
+      // Last-in-file-order wins, matching live drain/backfill upsert behavior
+      // for split-line responses whose usage snapshots grow across lines.
+      expectedByMessageId.set(usage.harnessMessageId, usage);
+    }
+  }
+
+  if (locatedSessionIds.length === 0) {
+    return {
+      code: "claude_code_transcript_consistency_skipped",
+      severity: "warning",
+      message:
+        `Claude Code transcript consistency check skipped because none of the ` +
+        `${sessions.length} DB session(s) had source transcripts under ${projectsDir}.`,
+      detail: {
+        projectsDir,
+        sessionCount: sessions.length,
+        missingSessionCount: missingHarnessSessionIds.length,
+        missingSample: missingHarnessSessionIds.slice(0, DUPLICATE_SAMPLE_SIZE),
+      },
+    };
+  }
+
+  const expected = summarizeClaudeCodeUsages(expectedByMessageId.values());
+  const actual = fetchClaudeCodeDbTotals(db, locatedSessionIds);
+
+  const deltas = {
+    count: actual.count - expected.count,
+    tokens: actual.tokens - expected.tokens,
+    costMicros: actual.costMicros - expected.costMicros,
+  };
+
+  if (deltas.count === 0 && deltas.tokens === 0 && deltas.costMicros === 0) {
+    return {
+      code: "claude_code_transcript_consistency_ok",
+      severity: "ok",
+      message:
+        `Claude Code DB rows match ${locatedSessionIds.length} source transcript-backed ` +
+        `session(s) (${expected.count} messages, ${expected.tokens} tokens, ` +
+        `${formatUsdMicros(expected.costMicros)}).` +
+        (missingHarnessSessionIds.length > 0
+          ? ` ${missingHarnessSessionIds.length} session(s) had no transcript on disk and were excluded.`
+          : ""),
+      detail: {
+        projectsDir,
+        checkedSessionCount: locatedSessionIds.length,
+        missingSessionCount: missingHarnessSessionIds.length,
+        expected,
+        actual,
+      },
+    };
+  }
+
+  return {
+    code: "claude_code_transcript_consistency_mismatch",
+    severity: "warning",
+    message:
+      `Claude Code DB rows differ from source transcripts for ${locatedSessionIds.length} ` +
+      `session(s): DB has ${actual.count} messages / ${actual.tokens} tokens / ` +
+      `${formatUsdMicros(actual.costMicros)}, transcripts imply ${expected.count} messages / ` +
+      `${expected.tokens} tokens / ${formatUsdMicros(expected.costMicros)}. ` +
+      `Run scripts/backfill-claude-code.ts to reconcile.`,
+    detail: {
+      projectsDir,
+      checkedSessionCount: locatedSessionIds.length,
+      missingSessionCount: missingHarnessSessionIds.length,
+      missingSample: missingHarnessSessionIds.slice(0, DUPLICATE_SAMPLE_SIZE),
+      expected,
+      actual,
+      deltas,
+    },
+  };
+}
+
+function claudeProjectsDir(): string {
+  return process.env[CLAUDE_PROJECTS_DIR_ENV] ?? join(homedir(), ".claude", "projects");
+}
+
+function findClaudeMainTranscriptPath(
+  projectsDir: string,
+  harnessSessionId: string,
+): string | null {
+  let projectDirs: string[];
+  try {
+    projectDirs = readdirSync(projectsDir);
+  } catch {
+    return null;
+  }
+
+  for (const projectDir of projectDirs) {
+    const candidate = join(projectsDir, projectDir, `${harnessSessionId}.jsonl`);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function discoverClaudeSubagentTranscripts(mainTranscriptPath: string): string[] {
+  const ext = extname(mainTranscriptPath);
+  const sessionId = basename(mainTranscriptPath, ext);
+  const subagentsDir = join(dirname(mainTranscriptPath), sessionId, "subagents");
+
+  let filenames: string[];
+  try {
+    filenames = readdirSync(subagentsDir);
+  } catch {
+    return [];
+  }
+
+  return filenames
+    .filter((name) => name.startsWith("agent-") && name.endsWith(".jsonl"))
+    .sort()
+    .map((name) => join(subagentsDir, name));
+}
+
+function readClaudeCodeUsages(mainTranscriptPath: string): ClaudeCodeUsage[] {
+  const paths = [mainTranscriptPath, ...discoverClaudeSubagentTranscripts(mainTranscriptPath)];
+  const usages: ClaudeCodeUsage[] = [];
+
+  for (const path of paths) {
+    let raw: string;
+    try {
+      raw = readFileSync(path, "utf8");
+    } catch {
+      continue;
+    }
+
+    const lines = raw.split("\n");
+    if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+
+    for (const line of lines) {
+      if (line.trim() === "") continue;
+      try {
+        const usage = extractClaudeCodeUsage(JSON.parse(line) as unknown);
+        if (usage !== null) usages.push(usage);
+      } catch {
+        // Match the live reader's tolerance for malformed JSONL lines: skip
+        // bad lines rather than making the entire doctor check fail.
+      }
+    }
+  }
+
+  return usages;
+}
+
+function extractClaudeCodeUsage(entry: unknown): ClaudeCodeUsage | null {
+  if (entry === null || typeof entry !== "object") return null;
+  const e = entry as Record<string, unknown>;
+  if (e["type"] !== "assistant" && e["role"] !== "assistant") return null;
+
+  const msg =
+    e["message"] !== null && typeof e["message"] === "object"
+      ? (e["message"] as Record<string, unknown>)
+      : null;
+
+  const rawMessageId = msg !== null ? msg["id"] : undefined;
+  const messageId =
+    typeof rawMessageId === "string" && rawMessageId.trim() !== "" ? rawMessageId : null;
+  const rawUuid = e["uuid"];
+  const uuid = typeof rawUuid === "string" && rawUuid.trim() !== "" ? rawUuid : null;
+  const harnessMessageId = messageId ?? uuid;
+  if (harnessMessageId === null) return null;
+
+  const usage =
+    msg !== null && msg["usage"] !== null && typeof msg["usage"] === "object"
+      ? (msg["usage"] as Record<string, unknown>)
+      : null;
+
+  const toInt = (v: unknown): number => {
+    if (typeof v === "number" && Number.isFinite(v)) return Math.max(0, Math.floor(v));
+    return 0;
+  };
+
+  return {
+    harnessMessageId,
+    modelId:
+      msg !== null && typeof msg["model"] === "string" && msg["model"].trim() !== ""
+        ? msg["model"]
+        : null,
+    inputTokens: toInt(usage?.["input_tokens"]),
+    outputTokens: toInt(usage?.["output_tokens"]),
+    cacheReadTokens: toInt(usage?.["cache_read_input_tokens"]),
+    cacheWriteTokens: toInt(usage?.["cache_creation_input_tokens"]),
+    legacyCostUSD:
+      typeof e["costUSD"] === "number" && Number.isFinite(e["costUSD"])
+        ? e["costUSD"]
+        : null,
+  };
+}
+
+function summarizeClaudeCodeUsages(usages: Iterable<ClaudeCodeUsage>): ClaudeCodeTotals {
+  const totals: ClaudeCodeTotals = { count: 0, tokens: 0, costMicros: 0 };
+  for (const usage of usages) {
+    totals.count += 1;
+    totals.tokens +=
+      usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
+    totals.costMicros += computeClaudeCodeCostTotalMicros(usage);
+  }
+  return totals;
+}
+
+function computeClaudeCodeCostTotalMicros(usage: ClaudeCodeUsage): number {
+  if (usage.legacyCostUSD !== null) return Math.round(usage.legacyCostUSD * 1_000_000);
+  const cost = computeCostMicros({
+    modelId: usage.modelId,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cacheReadTokens: usage.cacheReadTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
+  });
+  return (
+    cost.costInputMicros +
+    cost.costOutputMicros +
+    cost.costCacheReadMicros +
+    cost.costCacheWriteMicros
+  );
+}
+
+function fetchClaudeCodeDbTotals(db: Database.Database, sessionIds: string[]): ClaudeCodeTotals {
+  if (sessionIds.length === 0) return { count: 0, tokens: 0, costMicros: 0 };
+
+  const placeholders = sessionIds.map(() => "?").join(", ");
+  return db
+    .prepare(
+      `SELECT COUNT(*) AS count,
+              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens), 0) AS tokens,
+              COALESCE(SUM(cost_total_micros), 0) AS costMicros
+       FROM llm_messages
+       WHERE harness_id = 'claude-code'
+         AND session_id IN (${placeholders})`,
+    )
+    .get(...sessionIds) as ClaudeCodeTotals;
+}
+
+function formatUsdMicros(micros: number): string {
+  return `$${(micros / 1_000_000).toFixed(6)}`;
 }
 
 function checkStaleSessions(db: Database.Database, nowMs: number): Finding[] {

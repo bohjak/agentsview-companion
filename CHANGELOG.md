@@ -12,6 +12,10 @@ pre-release (`0.x`) and breaking changes may occur between any two commits.
 
 ### Added
 
+- `token-tally doctor` now compares Claude Code `llm_messages` rows against
+  source transcripts still available under `~/.claude/projects` (including
+  Task-tool subagent sidecars) and warns when DB totals drift from the
+  transcript-derived, `message.id`-deduped ground truth.
 - `scripts/backfill-claude-code.ts` can dry-run or apply reconciliation of
   historical Claude Code usage from main and Task-tool subagent transcripts.
 - `@token-tally/queries` shared read-only query package: single source of truth

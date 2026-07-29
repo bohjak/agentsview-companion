@@ -27,6 +27,69 @@ function findFinding(report, code) {
 }
 
 /**
+ * Runs a callback with TOKEN_TALLY_CLAUDE_PROJECTS_DIR pointed at a temporary
+ * Claude projects directory.
+ *
+ * @param {string} projectsDir
+ * @param {() => void} fn
+ */
+function withClaudeProjectsDir(projectsDir, fn) {
+  const prev = process.env.TOKEN_TALLY_CLAUDE_PROJECTS_DIR;
+  process.env.TOKEN_TALLY_CLAUDE_PROJECTS_DIR = projectsDir;
+  try {
+    fn();
+  } finally {
+    if (prev === undefined) {
+      delete process.env.TOKEN_TALLY_CLAUDE_PROJECTS_DIR;
+    } else {
+      process.env.TOKEN_TALLY_CLAUDE_PROJECTS_DIR = prev;
+    }
+  }
+}
+
+/**
+ * Writes a minimal Claude Code main transcript under a fake projects root.
+ *
+ * @param {string} projectsDir
+ * @param {string} harnessSessionId
+ * @param {unknown[]} entries
+ */
+function writeClaudeTranscript(projectsDir, harnessSessionId, entries) {
+  const projectDir = join(projectsDir, "-tmp-project");
+  mkdirSync(projectDir, { recursive: true });
+  writeFileSync(
+    join(projectDir, `${harnessSessionId}.jsonl`),
+    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n",
+  );
+}
+
+/**
+ * Creates a migrated DB with one Claude Code session.
+ *
+ * @param {string} dbPath
+ * @param {string} harnessSessionId
+ */
+function seedClaudeCodeSession(dbPath, harnessSessionId) {
+  const db = new Database(dbPath);
+  db.pragma("foreign_keys = ON");
+  runMigrations(db);
+
+  db.exec(`
+    INSERT INTO harnesses
+      (name, display_name, version, integration_version, first_seen_at, last_seen_at)
+    VALUES
+      ('claude-code', 'Claude Code', '1.0.0', '0.1.1', 1000, 1000);
+
+    INSERT INTO sessions
+      (id, harness_id, harness_session_id, cwd, started_at, ended_at)
+    VALUES
+      ('claude-session-db-id', 'claude-code', '${harnessSessionId}', '/tmp/project', 1000, 5000);
+  `);
+
+  db.close();
+}
+
+/**
  * Creates a migrated DB with one harness and two valid sessions sharing cwd.
  * Duplicate tests insert same-payload child rows under the two sessions.
  *
@@ -84,6 +147,111 @@ describe("doctor diagnostics", () => {
     assert.equal(report.status, "ok");
     assert.equal(findFinding(report, "duplicate_llm_messages_ok")?.severity, "ok");
     assert.equal(findFinding(report, "duplicate_tool_calls_ok")?.severity, "ok");
+    assert.equal(findFinding(report, "claude_code_transcript_consistency_ok")?.severity, "ok");
+  });
+
+  test("doctor reports Claude Code DB rows consistent with source transcript files", () => {
+    const dbPath = join(tmp.dir, "doctor-claude-consistent.db");
+    const projectsDir = join(tmp.dir, "claude-projects-consistent");
+    const harnessSessionId = "claude-session-consistent";
+    seedClaudeCodeSession(dbPath, harnessSessionId);
+    writeClaudeTranscript(projectsDir, harnessSessionId, [
+      {
+        type: "assistant",
+        uuid: "line-uuid-1",
+        message: {
+          id: "msg_consistent",
+          usage: {
+            input_tokens: 10,
+            output_tokens: 20,
+            cache_read_input_tokens: 3,
+            cache_creation_input_tokens: 4,
+          },
+        },
+      },
+    ]);
+
+    const db = new Database(dbPath);
+    db.pragma("foreign_keys = ON");
+    db.exec(`
+      INSERT INTO llm_messages
+        (id, session_id, turn_id, harness_id, harness_message_id, ts,
+         provider, model_id, input_tokens, output_tokens,
+         cache_read_tokens, cache_write_tokens,
+         cost_input_micros, cost_output_micros, cost_cache_read_micros,
+         cost_cache_write_micros, cost_total_micros, cost_source)
+      VALUES
+        ('message-consistent', 'claude-session-db-id', NULL, 'claude-code', 'msg_consistent', 2000,
+         'anthropic', NULL, 10, 20, 3, 4,
+         0, 0, 0, 0, 0, 'unknown');
+    `);
+    db.close();
+
+    withClaudeProjectsDir(projectsDir, () => {
+      const report = runDoctor(dbPath);
+      const finding = findFinding(report, "claude_code_transcript_consistency_ok");
+
+      assert.equal(report.status, "ok");
+      assert.equal(finding?.severity, "ok");
+      assert.equal(finding?.detail?.checkedSessionCount, 1);
+      assert.deepEqual(finding?.detail?.expected, { count: 1, tokens: 37, costMicros: 0 });
+      assert.deepEqual(finding?.detail?.actual, { count: 1, tokens: 37, costMicros: 0 });
+    });
+  });
+
+  test("doctor flags Claude Code DB drift from split-line uuid double counting", () => {
+    const dbPath = join(tmp.dir, "doctor-claude-mismatch.db");
+    const projectsDir = join(tmp.dir, "claude-projects-mismatch");
+    const harnessSessionId = "claude-session-mismatch";
+    seedClaudeCodeSession(dbPath, harnessSessionId);
+    writeClaudeTranscript(projectsDir, harnessSessionId, [
+      {
+        type: "assistant",
+        uuid: "line-uuid-a",
+        message: {
+          id: "msg_split",
+          usage: { input_tokens: 10, output_tokens: 20 },
+        },
+      },
+      {
+        type: "assistant",
+        uuid: "line-uuid-b",
+        message: {
+          id: "msg_split",
+          usage: { input_tokens: 10, output_tokens: 20 },
+        },
+      },
+    ]);
+
+    const db = new Database(dbPath);
+    db.pragma("foreign_keys = ON");
+    db.exec(`
+      INSERT INTO llm_messages
+        (id, session_id, turn_id, harness_id, harness_message_id, ts,
+         provider, model_id, input_tokens, output_tokens,
+         cache_read_tokens, cache_write_tokens,
+         cost_input_micros, cost_output_micros, cost_cache_read_micros,
+         cost_cache_write_micros, cost_total_micros, cost_source)
+      VALUES
+        ('message-split-a', 'claude-session-db-id', NULL, 'claude-code', 'line-uuid-a', 2000,
+         'anthropic', NULL, 10, 20, 0, 0,
+         0, 0, 0, 0, 0, 'unknown'),
+        ('message-split-b', 'claude-session-db-id', NULL, 'claude-code', 'line-uuid-b', 2000,
+         'anthropic', NULL, 10, 20, 0, 0,
+         0, 0, 0, 0, 0, 'unknown');
+    `);
+    db.close();
+
+    withClaudeProjectsDir(projectsDir, () => {
+      const report = runDoctor(dbPath);
+      const finding = findFinding(report, "claude_code_transcript_consistency_mismatch");
+
+      assert.equal(report.status, "ok", "Claude Code drift is warning-level, not fatal");
+      assert.equal(finding?.severity, "warning");
+      assert.deepEqual(finding?.detail?.expected, { count: 1, tokens: 30, costMicros: 0 });
+      assert.deepEqual(finding?.detail?.actual, { count: 2, tokens: 60, costMicros: 0 });
+      assert.deepEqual(finding?.detail?.deltas, { count: 1, tokens: 30, costMicros: 0 });
+    });
   });
 
   test("doctor flags likely duplicate LLM message rows", () => {
