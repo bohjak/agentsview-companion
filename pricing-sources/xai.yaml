@@ -8,45 +8,62 @@
 provider: xai
 asOf: "2026-05-13"
 sourceUrl: "https://x.ai/api"
+syncSourceUrl: "https://models.dev/api.json"
+syncedAt: "2026-08-24"
 
 models:
-  - id: grok-2
+  - id: "grok-2"
     aliases:
-      - grok-2-1212
-      - grok-2-latest
+      - "grok-2-1212"
+      - "grok-2-latest"
     inputPerMTokUSD: 2
     outputPerMTokUSD: 10
     cacheReadPerMTokUSD: 0
     cacheWritePerMTokUSD: 0
+    rateSourceUrl: "https://x.ai/api"
+    rateAsOf: "2026-05-13"
+    syncStatus: historical
 
-  - id: grok-2-vision
+  - id: "grok-2-mini"
     aliases:
-      - grok-2-vision-1212
-    inputPerMTokUSD: 2
-    outputPerMTokUSD: 10
-    cacheReadPerMTokUSD: 0
-    cacheWritePerMTokUSD: 0
-
-  - id: grok-2-mini
-    aliases:
-      - grok-2-mini-1212
+      - "grok-2-mini-1212"
     inputPerMTokUSD: 0.2
     outputPerMTokUSD: 0.4
     cacheReadPerMTokUSD: 0
     cacheWritePerMTokUSD: 0
+    rateSourceUrl: "https://x.ai/api"
+    rateAsOf: "2026-05-13"
+    syncStatus: historical
 
-  - id: grok-3
+  - id: "grok-2-vision"
     aliases:
-      - grok-3-latest
+      - "grok-2-vision-1212"
+    inputPerMTokUSD: 2
+    outputPerMTokUSD: 10
+    cacheReadPerMTokUSD: 0
+    cacheWritePerMTokUSD: 0
+    rateSourceUrl: "https://x.ai/api"
+    rateAsOf: "2026-05-13"
+    syncStatus: historical
+
+  - id: "grok-3"
+    aliases:
+      - "grok-3-latest"
     inputPerMTokUSD: 3
     outputPerMTokUSD: 15
     cacheReadPerMTokUSD: 0
     cacheWritePerMTokUSD: 0
+    rateSourceUrl: "https://x.ai/api"
+    rateAsOf: "2026-05-13"
+    syncStatus: historical
 
-  - id: grok-3-mini
+  - id: "grok-3-mini"
     aliases:
-      - grok-3-mini-latest
+      - "grok-3-mini-latest"
     inputPerMTokUSD: 0.3
     outputPerMTokUSD: 0.5
     cacheReadPerMTokUSD: 0
     cacheWritePerMTokUSD: 0
+    rateSourceUrl: "https://x.ai/api"
+    rateAsOf: "2026-05-13"
+    syncStatus: historical

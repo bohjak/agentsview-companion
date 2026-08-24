@@ -226,7 +226,7 @@ check_pricing() {
     pass "pricing: rates.json is up to date and all sources are fresh"
   else
     fail "pricing: rates.json is out of sync or sources are stale. " \
-      "Run 'pnpm exec tsx scripts/generate-pricing.ts' to regenerate and update asOf dates."
+      "Run 'pnpm --filter @token-tally/store sync:pricing' to refresh committed sources, then regenerate rates."
   fi
 }
 

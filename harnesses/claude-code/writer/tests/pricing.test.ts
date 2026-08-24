@@ -42,24 +42,12 @@ function makeUsage(overrides: Partial<AssistantUsage> = {}): AssistantUsage {
 // Shared expected rates — these are the canonical values from anthropic.yaml
 // (confirmed against rates.json). Hard-coded to make test failures explicit.
 const HAIKU_4_5_RATES = {
-  inputPerMTokUSD: 0.8,
-  outputPerMTokUSD: 4,
-  cacheReadPerMTokUSD: 0.08,
-  cacheWritePerMTokUSD: 1,
+  inputPerMTokUSD: 1,
+  outputPerMTokUSD: 5,
+  cacheReadPerMTokUSD: 0.1,
+  cacheWritePerMTokUSD: 1.25,
 };
 const SONNET_4_5_RATES = {
-  inputPerMTokUSD: 3,
-  outputPerMTokUSD: 15,
-  cacheReadPerMTokUSD: 0.3,
-  cacheWritePerMTokUSD: 3.75,
-};
-const OPUS_4_5_RATES = {
-  inputPerMTokUSD: 15,
-  outputPerMTokUSD: 75,
-  cacheReadPerMTokUSD: 1.5,
-  cacheWritePerMTokUSD: 18.75,
-};
-const SONNET_20241022_RATES = {
   inputPerMTokUSD: 3,
   outputPerMTokUSD: 15,
   cacheReadPerMTokUSD: 0.3,
@@ -76,39 +64,38 @@ describe("lookupRates (shared store pricing)", () => {
     assert.equal(rates.cacheWritePerMTokUSD, 1);
   });
 
+  it("prices the observed claude-opus-4-8 canonical model exactly", () => {
+    assert.deepEqual(lookupRates("claude-opus-4-8"), {
+      inputPerMTokUSD: 5, outputPerMTokUSD: 25, cacheReadPerMTokUSD: 0.5, cacheWritePerMTokUSD: 6.25,
+    });
+  });
+
   it("returns undefined and does not throw for unknown model", () => {
     // Previously returned null; the shared lookup returns undefined.
     const result = lookupRates("unknown-model-xyz-9999");
     assert.equal(result, undefined);
   });
 
-  it("prefix-match: claude-sonnet-4 matches claude-sonnet-4-5", () => {
-    // "claude-sonnet-4" is an alias for claude-sonnet-4-5 in anthropic.yaml.
+  it("resolves explicit aliases only", () => {
     const rates = lookupRates("claude-sonnet-4");
-    assert.ok(rates !== undefined, "prefix lookup should find claude-sonnet-4-5");
+    assert.ok(rates !== undefined, "explicit alias should resolve");
     assert.deepEqual(rates, SONNET_4_5_RATES);
   });
 
-  it("prefix-match: claude-opus-4 matches claude-opus-4-5", () => {
-    const rates = lookupRates("claude-opus-4");
-    assert.ok(rates !== undefined, "prefix lookup should find claude-opus-4-5");
-    assert.deepEqual(rates, OPUS_4_5_RATES);
+  it("resolves the Cursor snapshot as its own canonical ID", () => {
+    const rates = lookupRates("claude-sonnet-4-20250514");
+    assert.deepEqual(rates, SONNET_4_5_RATES);
   });
 
-  it("strip-segment fallback: matches versioned suffix variant", () => {
-    // Simulates a future model ID with an extra suffix that would need stripping.
-    // "claude-3-5-sonnet-20241022-turbo" → strip "-turbo" → "claude-3-5-sonnet-20241022" ✓
+  it("does not strip unknown future suffixes", () => {
     const rates = lookupRates("claude-3-5-sonnet-20241022-turbo");
-    assert.ok(rates !== undefined, "strip-segment fallback should find sonnet-20241022");
-    assert.deepEqual(rates, SONNET_20241022_RATES);
+    assert.equal(rates, undefined);
   });
 
-  // C2 regression tests: unknown claude-* models must NOT match via bare stem.
-  // The dash guard (candidate.includes("-") check) prevents "claude" alone from
-  // prefix-matching "claude-opus-4-5".
+  // C2 regression: unknown claude-* models must never inherit family rates.
   it("C2: unknown claude-* model returns undefined (not the first table entry)", () => {
-    // Without the dash guard, "claude-supernova-9" strips to "claude" which
-    // prefix-matches "claude-opus-4-5" — the most expensive model.
+    // Fuzzy prefix/segment fallback used to risk selecting the most expensive
+    // matching family entry.
     const rates = lookupRates("claude-supernova-9");
     assert.equal(rates, undefined, "unknown claude-* model should return undefined, not opus rates");
   });
@@ -116,10 +103,7 @@ describe("lookupRates (shared store pricing)", () => {
   it("C2: claude-haiku-4-5 is priced correctly", () => {
     const rates = lookupRates("claude-haiku-4-5");
     assert.ok(rates !== undefined, "claude-haiku-4-5 should be in the pricing table");
-    assert.equal(rates.inputPerMTokUSD, 0.8);
-    assert.equal(rates.outputPerMTokUSD, 4);
-    assert.equal(rates.cacheReadPerMTokUSD, 0.08);
-    assert.equal(rates.cacheWritePerMTokUSD, 1);
+    assert.deepEqual(rates, HAIKU_4_5_RATES);
   });
 
   it("C2: claude-haiku-4 alias resolves to claude-haiku-4-5 rates", () => {
@@ -127,6 +111,26 @@ describe("lookupRates (shared store pricing)", () => {
     const rates = lookupRates("claude-haiku-4");
     assert.ok(rates !== undefined, "claude-haiku-4 should resolve via alias");
     assert.deepEqual(rates, HAIKU_4_5_RATES);
+  });
+
+  it("exact-only lookup keeps claude-3 and fictional suffixes unknown", () => {
+    assert.equal(lookupRates("claude-3"), undefined);
+    assert.equal(lookupRates("claude-opus-4-8-turbo"), undefined);
+  });
+
+  it("keeps independently published OpenAI snapshots canonical", () => {
+    assert.deepEqual(lookupRates("gpt-4o-2024-05-13"), {
+      inputPerMTokUSD: 5,
+      outputPerMTokUSD: 15,
+      cacheReadPerMTokUSD: null,
+      cacheWritePerMTokUSD: 0,
+    });
+    assert.deepEqual(lookupRates("gpt-4o-2024-08-06"), {
+      inputPerMTokUSD: 2.5,
+      outputPerMTokUSD: 10,
+      cacheReadPerMTokUSD: 1.25,
+      cacheWritePerMTokUSD: 0,
+    });
   });
 
   it("C2: bare stem 'claude' alone returns undefined", () => {
@@ -179,6 +183,14 @@ describe("computeCostMicros (adapter)", () => {
     assert.equal(cost.costSource, "writer");
   });
 
+  it("unavailable cache component makes nonzero usage unknown", () => {
+    const cost = computeCostMicros(makeUsage({
+      modelId: "gemini-2.0-flash",
+      cacheWriteTokens: 1,
+    }));
+    assert.equal(cost.costSource, "unknown");
+  });
+
   it("unknown model returns all zeros and costSource unknown", () => {
     const usage = makeUsage({
       modelId: "totally-unknown-model-zzz",
@@ -210,14 +222,13 @@ describe("computeCostMicros (adapter)", () => {
   });
 
   it("opus rates apply correctly for 100k output tokens", () => {
-    // opus outputPerMTokUSD = 75  →  100_000 tokens × ($75/MTok)
-    //   = 100_000 × (75 / 1_000_000) × 1_000_000 = 7_500_000 micros ($7.50)
+    // opus outputPerMTokUSD = 25 → 100_000 tokens = 2_500_000 micros ($2.50).
     const usage = makeUsage({
       modelId: "claude-opus-4-5",
       outputTokens: 100_000,
     });
     const cost = computeCostMicros(usage);
-    assert.equal(cost.costOutputMicros, 7_500_000);
+    assert.equal(cost.costOutputMicros, 2_500_000);
     assert.equal(cost.costSource, "writer");
   });
 

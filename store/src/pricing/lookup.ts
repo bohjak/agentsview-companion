@@ -21,16 +21,16 @@ import ratesData from "./rates.json";
 // ---------------------------------------------------------------------------
 
 /** Per-model list-price rates, all in USD per million tokens (MTok). */
-export interface ModelRates {
+export type ModelRates = {
   /** USD per million input tokens at list price. */
-  inputPerMTokUSD: number;
+  inputPerMTokUSD: number | null;
   /** USD per million output tokens at list price. */
-  outputPerMTokUSD: number;
+  outputPerMTokUSD: number | null;
   /** USD per million cache-read tokens at list price. */
-  cacheReadPerMTokUSD: number;
+  cacheReadPerMTokUSD: number | null;
   /** USD per million cache-write (creation) tokens at list price. */
-  cacheWritePerMTokUSD: number;
-}
+  cacheWritePerMTokUSD: number | null;
+};
 
 /**
  * Cost breakdown in integer micro-dollars (1 USD = 1_000_000 micros).
@@ -44,17 +44,17 @@ export interface ModelRates {
  * `costSource` is `"writer"` when rates were found and applied, `"unknown"`
  * when the model is not in the pricing table (all cost fields are 0).
  */
-export interface CostBreakdown {
+export type CostBreakdown = {
   costInputMicros: number;
   costOutputMicros: number;
   costCacheReadMicros: number;
   costCacheWriteMicros: number;
   /** `"writer"` | `"unknown"` */
   costSource: "writer" | "unknown";
-}
+};
 
 /** Input to computeCostMicros. */
-export interface CostInput {
+export type CostInput = {
   /** Model identifier as reported by the harness (e.g. "claude-sonnet-4-5"). */
   modelId: string | null | undefined;
   /** Tokens in the prompt/input. */
@@ -65,28 +65,27 @@ export interface CostInput {
   cacheReadTokens?: number;
   /** Cache-write (cache-creation) tokens. Default 0. */
   cacheWriteTokens?: number;
-}
+};
 
 // ---------------------------------------------------------------------------
 // Internal lookup tables
 //
-// Built once at module load from rates.json. We maintain three maps for the
-// three-step resolution used by lookupRates():
+// Built once at module load from rates.json. We maintain two maps for exact
+// resolution in lookupRates():
 //   1. exactById     — canonical model id → rates
-//   2. exactByAlias  — alias string → rates
-//   3. allIds        — sorted list of all canonical ids for prefix matching
+//   2. exactByAlias  — explicit alias string → rates
 // ---------------------------------------------------------------------------
 
 // Shape of a model entry in rates.json.
-interface RateEntry {
+type RateEntry = {
   id: string;
   provider: string;
   aliases: string[];
-  inputPerMTokUSD: number;
-  outputPerMTokUSD: number;
-  cacheReadPerMTokUSD: number;
-  cacheWritePerMTokUSD: number;
-}
+  inputPerMTokUSD: number | null;
+  outputPerMTokUSD: number | null;
+  cacheReadPerMTokUSD: number | null;
+  cacheWritePerMTokUSD: number | null;
+};
 
 const exactById = new Map<string, ModelRates>();
 const exactByAlias = new Map<string, ModelRates>();
@@ -109,9 +108,6 @@ for (const entry of ratesData.models as RateEntry[]) {
   }
 }
 
-// Sorted canonical ids, used for prefix matching.
-const allIds: string[] = Array.from(exactById.keys()).sort();
-
 // Per-process set of model IDs already warned about (suppresses repeat noise).
 const _warnedIds = new Set<string>();
 
@@ -122,44 +118,22 @@ const _warnedIds = new Set<string>();
 /**
  * Look up pricing rates for a model ID.
  *
- * Resolution order (matches the Claude Code writer's algorithm):
+ * Resolution order:
  *   1. Exact match in the canonical ID table.
- *   2. Exact match in the alias table.
- *   3. Prefix match: any canonical ID that starts with `modelId + "-"`.
- *   4. Iteratively strip the last dash-segment from `modelId` and repeat
- *      steps 1–3 until the string is exhausted.
+ *   2. Exact match in the explicit alias table.
+ *
+ * Version/family guessing is intentionally forbidden: an unknown future ID
+ * must remain unknown instead of inheriting a potentially wrong rate.
  *
  * Returns `undefined` and emits a one-time `console.warn` for unknown models
  * so callers can record `cost_source = 'unknown'` rather than silently
  * storing zeros.
  */
 export function lookupRates(modelId: string): ModelRates | undefined {
-  let candidate = modelId;
-
-  while (candidate.length > 0) {
-    // Step 1: exact canonical-id match.
-    const byId = exactById.get(candidate);
-    if (byId !== undefined) return byId;
-
-    // Step 2: exact alias match.
-    const byAlias = exactByAlias.get(candidate);
-    if (byAlias !== undefined) return byAlias;
-
-    // Step 3: prefix match — candidate is a prefix of a canonical id.
-    // Guard: only attempt prefix matching when the candidate contains at least
-    // one dash, so bare provider stems like "claude" or "gpt" can never match
-    // the alphabetically-first table entry and assign the wrong rates.
-    if (candidate.includes("-")) {
-      const prefix = candidate + "-";
-      const prefixHit = allIds.find((id) => id.startsWith(prefix));
-      if (prefixHit !== undefined) return exactById.get(prefixHit);
-    }
-
-    // Step 4: strip the last dash-segment and retry.
-    const lastDash = candidate.lastIndexOf("-");
-    if (lastDash === -1) break;
-    candidate = candidate.slice(0, lastDash);
-  }
+  const byId = exactById.get(modelId);
+  if (byId !== undefined) return byId;
+  const byAlias = exactByAlias.get(modelId);
+  if (byAlias !== undefined) return byAlias;
 
   // Unknown model — warn once per process per ID.
   if (!_warnedIds.has(modelId)) {
@@ -195,11 +169,18 @@ export function computeCostMicros(params: CostInput): CostBreakdown {
     return zeroCostBreakdown();
   }
 
+  if (
+    unavailableForTokens(inputTokens, rates.inputPerMTokUSD) ||
+    unavailableForTokens(outputTokens, rates.outputPerMTokUSD) ||
+    unavailableForTokens(cacheReadTokens, rates.cacheReadPerMTokUSD) ||
+    unavailableForTokens(cacheWriteTokens, rates.cacheWritePerMTokUSD)
+  ) return zeroCostBreakdown();
+
   return {
-    costInputMicros: tokensToMicros(inputTokens, rates.inputPerMTokUSD),
-    costOutputMicros: tokensToMicros(outputTokens, rates.outputPerMTokUSD),
-    costCacheReadMicros: tokensToMicros(cacheReadTokens, rates.cacheReadPerMTokUSD),
-    costCacheWriteMicros: tokensToMicros(cacheWriteTokens, rates.cacheWritePerMTokUSD),
+    costInputMicros: tokensToMicros(inputTokens, rates.inputPerMTokUSD!),
+    costOutputMicros: tokensToMicros(outputTokens, rates.outputPerMTokUSD!),
+    costCacheReadMicros: tokensToMicros(cacheReadTokens, rates.cacheReadPerMTokUSD ?? 0),
+    costCacheWriteMicros: tokensToMicros(cacheWriteTokens, rates.cacheWritePerMTokUSD ?? 0),
     costSource: "writer",
   };
 }
@@ -217,6 +198,10 @@ export function computeCostMicros(params: CostInput): CostBreakdown {
  */
 function tokensToMicros(tokens: number, ratePerMTokUSD: number): number {
   return Math.round(tokens * ratePerMTokUSD);
+}
+
+function unavailableForTokens(tokens: number, ratePerMTokUSD: number | null): boolean {
+  return tokens !== 0 && ratePerMTokUSD === null;
 }
 
 function zeroCostBreakdown(): CostBreakdown {

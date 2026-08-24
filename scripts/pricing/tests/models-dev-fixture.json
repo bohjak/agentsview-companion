@@ -1,0 +1,6 @@
+{
+  "anthropic": { "models": { "claude-opus-4-8": { "modalities": { "input": ["text"], "output": ["text"] }, "cost": { "input": 5, "output": 25, "cache_read": 0.5, "cache_write": 6.25 }, "last_updated": "2026-05-28" } } },
+  "google": { "models": { "gemini-test": { "modalities": { "input": ["text"], "output": ["text"] }, "cost": { "input": 1, "output": 2, "cache_read": 0.1 }, "last_updated": "2026-07-29" } } },
+  "openai": { "models": { "gpt-test": { "modalities": { "input": ["text"], "output": ["text"] }, "cost": { "input": 1, "output": 2, "cache_read": 0.5 }, "last_updated": "2026-07-29" } } },
+  "xai": { "models": { "grok-test": { "modalities": { "input": ["text"], "output": ["text"] }, "cost": { "input": 1, "output": 2 }, "last_updated": "2026-07-29" } } }
+}

@@ -31,6 +31,8 @@
   },
   "scripts": {
     "gen:pricing": "pnpm -w exec tsx scripts/generate-pricing.ts",
+    "sync:pricing": "pnpm -w exec tsx scripts/sync-pricing.ts",
+    "test:pricing": "pnpm -w exec tsx --test scripts/pricing/tests/*.test.ts",
     "build": "pnpm gen:pricing && tsc",
     "build:sea": "pnpm gen:pricing && tsc && node scripts/build-sea.mjs",
     "typecheck": "pnpm gen:pricing && tsc --noEmit",

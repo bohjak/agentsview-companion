@@ -35,8 +35,8 @@ import { runBackfill } from "../src/hooks/stop.js";
 // ---------------------------------------------------------------------------
 // Known pricing constants for assertions
 //
-// claude-sonnet-4-20250514 resolves (via alias "claude-sonnet-4") to:
-//   claude-sonnet-4-5  inputPerMTokUSD=3, outputPerMTokUSD=15
+// claude-sonnet-4-20250514 is an explicit canonical pricing entry with
+// inputPerMTokUSD=3 and outputPerMTokUSD=15; it never relies on fuzzy lookup.
 //
 // tokensToMicros(n, rate) = Math.round(n * rate)
 //   1000 input  × 3  = 3_000  micros

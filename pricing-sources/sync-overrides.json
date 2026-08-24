@@ -1,0 +1,26 @@
+{
+  "anthropic/claude-sonnet-4-20250514": {
+    "canonical": true,
+    "rates": {
+      "inputPerMTokUSD": 3,
+      "outputPerMTokUSD": 15,
+      "cacheReadPerMTokUSD": 0.3,
+      "cacheWritePerMTokUSD": 3.75
+    },
+    "rateSourceUrl": "https://www.anthropic.com/pricing",
+    "rateAsOf": "2026-05-13",
+    "reason": "Cursor reports this provider-native snapshot; its selected standard rate matches Claude Sonnet 4."
+  },
+  "openai/gpt-4o-2024-05-13": {
+    "canonical": true,
+    "rates": {
+      "inputPerMTokUSD": 5,
+      "outputPerMTokUSD": 15,
+      "cacheReadPerMTokUSD": null,
+      "cacheWritePerMTokUSD": 0
+    },
+    "rateSourceUrl": "https://platform.openai.com/docs/pricing",
+    "rateAsOf": "2024-05-13",
+    "reason": "The launch snapshot has distinct historical standard pricing and must not inherit current gpt-4o rates."
+  }
+}

@@ -12,6 +12,7 @@ pre-release (`0.x`) and breaking changes may occur between any two commits.
 
 ### Added
 
+- Automated, conservative pricing catalog synchronization (`pnpm --filter @token-tally/store sync:pricing`) with source provenance, explicit overrides, historical-model retention, and exact-only runtime model resolution. Ambiguous pricing and unavailable token components now remain `cost_source='unknown'` rather than inheriting guessed rates.
 - `token-tally doctor` now compares Claude Code `llm_messages` rows against
   source transcripts still available under `~/.claude/projects` (including
   Task-tool subagent sidecars) and warns when DB totals drift from the
