@@ -93,7 +93,8 @@ main() {
   mkdir -p "${sea_dir}"
   cp "${repo_root}/store/dist/sea/token-tally" "${sea_dir}/token-tally"
   cp "${repo_root}/store/dist/sea/better_sqlite3.node" "${sea_dir}/better_sqlite3.node"
-  chmod +x "${sea_dir}/token-tally"
+  cp "${repo_root}/store/dist/sea/node" "${sea_dir}/node"
+  chmod +x "${sea_dir}/token-tally" "${sea_dir}/node"
 
   if [[ "$(uname -s)" == "Darwin" ]]; then
     # macOS can reject a copied SEA binary with "Killed: 9" even when the

@@ -4,6 +4,7 @@
  *
  * Outputs (all under store/dist/sea/):
  *   token-tally          — self-contained executable (Node binary + CLI bundle)
+ *   node                — matching runtime for explorer subprocesses
  *   better_sqlite3.node  — native SQLite addon (must be distributed alongside
  *                          the binary in the same directory)
  *
@@ -111,6 +112,8 @@ console.log("  →", blobPath);
 // 3. Copy the running Node binary as the base executable
 // ---------------------------------------------------------------------------
 console.log("Copying Node binary…");
+copyFileSync(process.execPath, join(outDir, "node"));
+chmodSync(join(outDir, "node"), 0o755);
 copyFileSync(process.execPath, binaryPath);
 chmodSync(binaryPath, 0o755);
 
@@ -163,4 +166,5 @@ console.log("  →", addonDst);
 console.log("\nDone. SEA outputs:");
 console.log("  binary:", binaryPath);
 console.log("  addon: ", addonDst);
-console.log("\nDistribute both files in the same directory.");
+console.log("  node:  ", join(outDir, "node"));
+console.log("\nDistribute all three files in the same directory.");

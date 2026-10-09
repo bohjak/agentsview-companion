@@ -312,7 +312,7 @@ export async function launch(options: ExploreOptions): Promise<number> {
   }
 
   // ── Detached mode (default) ───────────────────────────────────────────────
-  const child = spawn("node", [serverDistPath, ...serverArgv], {
+  const child = spawn(process.execPath, [serverDistPath, ...serverArgv], {
     detached: true,
     stdio: "ignore",
   });

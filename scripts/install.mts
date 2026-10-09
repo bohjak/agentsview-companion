@@ -631,7 +631,7 @@ function writeManifest(state: InstallState): void {
         installed: state.storeOk,
         databasePath: state.storeDbPath,
         schemaVersion: state.storeSchemaVersion,
-        nodePath: process.execPath,
+        nodePath: join(dataDir, "bin/node"),
       },
       daemon: {
         registered: state.daemonOk,

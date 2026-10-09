@@ -533,11 +533,7 @@ export async function main(argv: string[]): Promise<number> {
 
 type InstallManifest = {
   repoPath?: unknown;
-  nodePath?: unknown;
   components?: {
-    store?: {
-      nodePath?: unknown;
-    };
     webExplorer?: {
       distServerPath?: unknown;
     };
@@ -624,14 +620,11 @@ function resolveNodePath(): string {
   const override = process.env["TOKEN_TALLY_NODE"];
   if (override !== undefined && override !== "") return override;
 
-  const manifest = readInstallManifest();
-  const storeNodePath = manifest?.components?.store?.nodePath;
-  if (typeof storeNodePath === "string" && storeNodePath !== "") return storeNodePath;
+  if (basename(process.execPath) === "token-tally") {
+    return join(dirname(process.execPath), "node");
+  }
 
-  const nodePath = manifest?.nodePath;
-  if (typeof nodePath === "string" && nodePath !== "") return nodePath;
-
-  return "node";
+  return process.execPath;
 }
 
 async function runSourceExploreCli(sourceCliPath: string, argv: string[]): Promise<number> {
