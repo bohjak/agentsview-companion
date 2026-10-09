@@ -499,19 +499,19 @@ function runWebExplorerInstall(state: InstallState): void {
   process.exit(1);
 }
 
-function runPricingGeneration(): void {
+function runPricingSync(): void {
   section("Pricing table");
-  const pricingScript = join(repoRoot, "scripts/generate-pricing.ts");
+  const pricingScript = join(repoRoot, "scripts/sync-pricing.ts");
   if (!existsSync(pricingScript)) {
-    warn("scripts/generate-pricing.ts not found — skipping pricing table generation");
+    warn("scripts/sync-pricing.ts not found — skipping pricing table sync");
     return;
   }
 
   if (!run("node", ["--no-warnings=MODULE_TYPELESS_PACKAGE_JSON", pricingScript])) {
-    err("Pricing table generation failed — aborting");
+    err("Pricing table sync failed — aborting");
     process.exit(1);
   }
-  info("Pricing table up to date (store/src/pricing/rates.json)");
+  info("Pricing sources and runtime table up to date");
 }
 
 function runStoreInstall(state: InstallState): void {
@@ -749,7 +749,7 @@ async function main(): Promise<void> {
   info("Directories created (data, config, state)");
 
   const state = initialInstallState();
-  runPricingGeneration();
+  runPricingSync();
   runStoreInstall(state);
   runDaemonInstall(state);
 

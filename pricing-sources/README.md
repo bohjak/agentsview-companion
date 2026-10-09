@@ -6,8 +6,10 @@ priority/fast, audio, image, reseller, and negotiated prices are intentionally
 excluded. Multimodal input is eligible only when the feed exposes one standard
 text-token rate and text is the model's sole output modality.
 
-- `pnpm --filter @token-tally/store sync:pricing` fetches models.dev, conservatively
-  merges supported direct-provider models, and regenerates runtime rates.
+- `make sync-pricing` fetches models.dev, conservatively merges supported
+  direct-provider models, and regenerates runtime rates. The same sync runs during
+  `make install`.
+- `pnpm --filter @token-tally/store sync:pricing` is the equivalent package command.
 - Add `-- --dry-run` to inspect a deterministic proposed sync without changing
   committed sources. `-- --provider anthropic` and `-- --catalog-file fixture.json`
   limit/select the catalog but still write unless combined with `--dry-run`.

@@ -39,6 +39,10 @@ For unattended installs, run `scripts/install.sh --all` (or set
 set. Non-interactive shells do the same. Optional harness integrations are not
 offered or installed when their harness is not detected.
 
+Before installing components, the installer runs the pricing catalog sync against
+models.dev and regenerates the runtime pricing table. Run `make sync-pricing` to
+perform only this step.
+
 The installer then runs each selected component in order:
 
 1. **Store & CLI** — installs pnpm workspace dependencies, builds the

@@ -12,11 +12,12 @@ SHELL := /bin/bash
 #   make install-cli  — same as `make install cli`
 #   make uninstall    — remove installed components (user data kept by default)
 #   make doctor       — diagnostic check of all components
+#   make sync-pricing — update pricing sources and generated runtime rates
 #   make test         — run all tests
 
 TOKEN_TALLY_DATA_DIR := $(if $(XDG_DATA_HOME),$(XDG_DATA_HOME),$(HOME)/.local/share)/token-tally
 
-.PHONY: install cli install-cli uninstall doctor test
+.PHONY: install cli install-cli uninstall doctor sync-pricing test
 
 install:
 ifeq ($(filter cli,$(MAKECMDGOALS)),cli)
@@ -39,6 +40,9 @@ uninstall:
 
 doctor:
 	@scripts/doctor.sh
+
+sync-pricing:
+	@node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/sync-pricing.ts
 
 test:
 	@pnpm --filter @token-tally/store build

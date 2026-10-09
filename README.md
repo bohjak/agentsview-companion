@@ -66,8 +66,9 @@ git pull
 make install
 ```
 
-`make install` is idempotent. Run it after every `git pull` — it migrates the
-database, rebuilds the app, and updates extension symlinks automatically.
+`make install` is idempotent. Run it after every `git pull` — it refreshes the
+provider pricing catalogs, migrates the database, rebuilds the app, and updates
+extension symlinks automatically. To refresh only pricing, run `make sync-pricing`.
 
 ---
 
