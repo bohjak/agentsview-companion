@@ -13,7 +13,7 @@ provider: anthropic
 asOf: "2026-05-13"
 sourceUrl: "https://www.anthropic.com/pricing"
 syncSourceUrl: "https://models.dev/api.json"
-syncedAt: "2026-08-24"
+syncedAt: "2026-10-09"
 
 models:
   - id: "claude-3-5-haiku-20241022"
@@ -87,6 +87,15 @@ models:
     cacheWritePerMTokUSD: 12.5
     rateSourceUrl: "https://models.dev/api.json"
     rateAsOf: "2026-06-09"
+    syncStatus: current
+
+  - id: "claude-fable-5-1"
+    inputPerMTokUSD: 10
+    outputPerMTokUSD: 50
+    cacheReadPerMTokUSD: 0.25
+    cacheWritePerMTokUSD: 12.5
+    rateSourceUrl: "https://models.dev/api.json"
+    rateAsOf: "2026-09-01"
     syncStatus: current
 
   - id: "claude-haiku-4-5"
@@ -165,6 +174,15 @@ models:
     rateAsOf: "2026-07-24"
     syncStatus: current
 
+  - id: "claude-opus-5-5"
+    inputPerMTokUSD: 4
+    outputPerMTokUSD: 20
+    cacheReadPerMTokUSD: 0.2
+    cacheWritePerMTokUSD: 5
+    rateSourceUrl: "https://models.dev/api.json"
+    rateAsOf: "2026-09-22"
+    syncStatus: current
+
   - id: "claude-sonnet-4-20250514"
     inputPerMTokUSD: 3
     outputPerMTokUSD: 15
@@ -210,4 +228,13 @@ models:
     cacheWritePerMTokUSD: 2.5
     rateSourceUrl: "https://models.dev/api.json"
     rateAsOf: "2026-06-30"
+    syncStatus: current
+
+  - id: "claude-sonnet-5-5"
+    inputPerMTokUSD: 2
+    outputPerMTokUSD: 10
+    cacheReadPerMTokUSD: 0.1
+    cacheWritePerMTokUSD: 2.5
+    rateSourceUrl: "https://models.dev/api.json"
+    rateAsOf: "2026-09-28"
     syncStatus: current

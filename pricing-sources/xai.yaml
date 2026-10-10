@@ -9,7 +9,7 @@ provider: xai
 asOf: "2026-05-13"
 sourceUrl: "https://x.ai/api"
 syncSourceUrl: "https://models.dev/api.json"
-syncedAt: "2026-08-24"
+syncedAt: "2026-10-09"
 
 models:
   - id: "grok-2"

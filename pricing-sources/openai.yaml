@@ -11,7 +11,7 @@ provider: openai
 asOf: "2026-05-13"
 sourceUrl: "https://platform.openai.com/docs/pricing"
 syncSourceUrl: "https://models.dev/api.json"
-syncedAt: "2026-08-24"
+syncedAt: "2026-10-09"
 
 models:
   - id: "gpt-4"
@@ -160,7 +160,7 @@ models:
     cacheWritePerMTokUSD: 0
     rateSourceUrl: "https://models.dev/api.json"
     rateAsOf: "2025-12-11"
-    syncStatus: current
+    syncStatus: historical
 
   - id: "gpt-5.2-pro"
     inputPerMTokUSD: 21
@@ -178,7 +178,7 @@ models:
     cacheWritePerMTokUSD: 0
     rateSourceUrl: "https://models.dev/api.json"
     rateAsOf: "2026-03-03"
-    syncStatus: current
+    syncStatus: historical
 
   - id: "gpt-5.3-codex"
     inputPerMTokUSD: 1.75
@@ -214,6 +214,15 @@ models:
     cacheWritePerMTokUSD: 0
     rateSourceUrl: "https://models.dev/api.json"
     rateAsOf: "2026-03-17"
+    syncStatus: current
+
+  - id: "gpt-daybreak-red-latest"
+    inputPerMTokUSD: 12.5
+    outputPerMTokUSD: 75
+    cacheReadPerMTokUSD: 1.25
+    cacheWritePerMTokUSD: 0
+    rateSourceUrl: "https://models.dev/api.json"
+    rateAsOf: "2026-08-07"
     syncStatus: current
 
   - id: "o1"
