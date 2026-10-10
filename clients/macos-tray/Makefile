@@ -34,8 +34,14 @@ INSTALL_DIR         := /Applications
 
 .PHONY: build install test run clean
 
+# Why SDKROOT is selected: SwiftUI's @State became a macro in the macOS 27
+# SDK whose compiler plugin ships with Xcode only; Command Line Tools need an
+# older SDK. scripts/tray-sdkroot.sh prints the SDK path to pin, nothing when
+# the default is fine, or fails with a diagnostic when no SDK is usable.
 build:
 	@set -euo pipefail; \
+	sdkroot=$$(bash ../../scripts/tray-sdkroot.sh); \
+	if [[ -n "$${sdkroot}" ]]; then export SDKROOT="$${sdkroot}"; fi; \
 	swift build --configuration "$(BUILD_CONFIGURATION)"; \
 	rm -rf "$(BUNDLE_DIR)"; \
 	mkdir -p "$(MACOS_DIR)" "$(RESOURCES_DIR)"; \
@@ -59,7 +65,10 @@ test:
 	  printf '  Then retry '"'"'make -C clients/macos-tray test'"'"'.\n\n'; \
 	  exit 1; \
 	fi
-	@swift test
+	@set -euo pipefail; \
+	sdkroot=$$(bash ../../scripts/tray-sdkroot.sh); \
+	if [[ -n "$${sdkroot}" ]]; then export SDKROOT="$${sdkroot}"; fi; \
+	swift test
 
 run: build
 	@open "$(BUNDLE_DIR)"

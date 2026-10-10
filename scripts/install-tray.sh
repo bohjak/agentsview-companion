@@ -23,6 +23,8 @@
 #   1   failure (no silent fallback to ~/Applications)
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 BUNDLE_NAME="ToTally.app"
 APP_NAME="ToTally"
 BUNDLE_ID="com.token-tally.ToTally"
@@ -50,6 +52,12 @@ build_bundle() {
   local tray_dir="$1"
 
   echo "  Building Swift app (release)…"
+  local sdkroot
+  # See scripts/tray-sdkroot.sh: CLT-only systems need a pre-macro-@State SDK.
+  sdkroot=$(bash "${SCRIPT_DIR}/tray-sdkroot.sh")
+  if [[ -n "${sdkroot}" ]]; then
+    export SDKROOT="${sdkroot}"
+  fi
   swift build \
     --package-path "${tray_dir}" \
     --configuration release \

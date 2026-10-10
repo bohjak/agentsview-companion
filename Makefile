@@ -65,5 +65,7 @@ test:
 	  printf '  Then retry '"'"'make test'"'"'.\n\n'; \
 	  exit 1; \
 	fi
-	@swift test --package-path clients/macos-tray \
+	@sdkroot=$$(bash scripts/tray-sdkroot.sh); \
+	if [[ -n "$${sdkroot}" ]]; then export SDKROOT="$${sdkroot}"; fi; \
+	swift test --package-path clients/macos-tray \
 	  --filter "AnalyticsQueriesTests|FormattersTests|AnalyticsTrayTests"
