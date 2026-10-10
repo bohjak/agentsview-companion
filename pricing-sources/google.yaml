@@ -12,7 +12,7 @@ provider: google
 asOf: "2026-05-13"
 sourceUrl: "https://ai.google.dev/gemini-api/docs/pricing"
 syncSourceUrl: "https://models.dev/api.json"
-syncedAt: "2026-10-09"
+syncedAt: "2026-10-10"
 
 models:
   - id: "gemini-1.5-flash"

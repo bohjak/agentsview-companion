@@ -13,7 +13,7 @@ provider: anthropic
 asOf: "2026-05-13"
 sourceUrl: "https://www.anthropic.com/pricing"
 syncSourceUrl: "https://models.dev/api.json"
-syncedAt: "2026-10-09"
+syncedAt: "2026-10-10"
 
 models:
   - id: "claude-3-5-haiku-20241022"
