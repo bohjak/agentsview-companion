@@ -1,9 +1,7 @@
 import SwiftUI
 
 /// Lists the top five models by cost for the configured time window.
-///
-/// Model IDs come from `llm_messages.model_id` (preferred) or `turns.model_id`
-/// (fallback). Rows that still cannot be attributed display "unattributed".
+
 struct TopModelsView: View {
 
     let models: [ModelBreakdown]

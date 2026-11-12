@@ -16,6 +16,4 @@ struct DailyCostPoint: Identifiable, Equatable {
     /// Total cost in USD for this day.
     let costUSD: Double
 
-    /// Non-cached billable tokens (`input_tokens + output_tokens`) for this day.
-    let billableTokens: Int64
 }

@@ -2,15 +2,12 @@ import SwiftUI
 
 /// Displays a rolled-up usage summary for a single time window (today or this week).
 ///
-/// **Token accounting rule:** only `bucket.billableTokens` is shown. `cachedTokens`
-/// is deliberately omitted so the displayed number matches what affects cost.
+/// Token and cost totals use AgentsView's usage report.
 struct SummaryCard: View {
 
     let title: String
     let bucket: UsageBucket
-    /// Pass `true` for the Today card; `false` for the Week card (which shows
-    /// sessions but not turns per the PLAN.md product spec).
-    var showTurns: Bool = true
+    let includeCachedTokens: Bool
     /// Optional background sparkline values. When non-empty, a subdued line
     /// chart is rendered behind the card text for visual flair.
     var backgroundChartValues: [Double] = []
@@ -67,8 +64,8 @@ struct SummaryCard: View {
             )
             Spacer()
             metricColumn(
-                value: Formatters.formatTokens(bucket.billableTokens),
-                label: "tokens"
+                value: Formatters.formatTokens(bucket.displayedTokens(includeCached: includeCachedTokens)),
+                label: includeCachedTokens ? "tokens" : "uncached tokens"
             )
         }
     }
@@ -85,13 +82,10 @@ struct SummaryCard: View {
         }
     }
 
-    // MARK: - Secondary metrics (turns + sessions)
+    // MARK: - Sessions
 
     private var secondaryMetricsRow: some View {
         HStack(spacing: 12) {
-            if showTurns {
-                miniStat(icon: "arrow.turn.down.right", count: bucket.turns, singular: "turn", plural: "turns")
-            }
             miniStat(icon: "terminal", count: bucket.sessions, singular: "session", plural: "sessions")
             Spacer()
         }

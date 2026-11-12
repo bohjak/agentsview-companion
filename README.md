@@ -1,232 +1,96 @@
-# ToTally
+# AgentsView Companion
 
-A local analytics platform for coding-agent harnesses. ToTally collects token
-usage and cost data from agents into a central SQLite database on your machine
-and shows a glanceable summary in the macOS menu bar.
+Native macOS menu-bar app (**ToTally**) and Pi `/usage` extension for
+[AgentsView](https://agentsview.io/). Both clients read AgentsView's local API;
+the companion has no database, collectors, pricing engine, or web server.
 
-```
-Σ 284k · $1.42
-```
+## Setup
 
-**All data stays local.** ToTally never transmits analytics data anywhere.
-
----
-
-## Project status and support
-
-This is a public personal project. You are welcome to read, fork, install, and
-use it under the MIT License, but publication does **not** imply an ongoing
-maintenance commitment.
-
-Please assume:
-
-- no support, roadmap, release cadence, or compatibility guarantees;
-- issues and feature requests may not be read or answered;
-- pull requests may not be reviewed or accepted;
-- the repository may change direction, go quiet, or stop being updated at any
-  time.
-
-If you rely on ToTally, you should be comfortable maintaining your own fork.
-
----
-
-## Quick start
+Install and start AgentsView separately:
 
 ```sh
-git clone https://github.com/bohjak/token-tally
-cd token-tally
+brew install kenn-io/tap/agentsview
+agentsview daemon start
+git clone https://github.com/bohjak/agentsview-companion
+cd agentsview-companion
 make install
 ```
 
-`make install` opens an interactive component picker, then builds and installs
-the selected set:
+On macOS, this builds and installs `/Applications/ToTally.app` and restarts it.
+If Pi is present, it also symlinks the `/usage` extension into Pi's extensions
+directory. Reload Pi to pick up changes. Install either client separately with
+`make install-tray` or `make install-pi`. Run `git pull && make install` to update.
 
-- always creates the central database at `~/.local/share/token-tally/events.db`
-- optionally builds and installs `/Applications/ToTally.app`, restarting it if already running
-- registers the app as a login item (enabled by default; change in Settings)
-- optionally installs the Pi writer and Pi usage-command extension independently (if Pi is present)
-- optionally installs Claude Code hooks (if Claude Code is detected)
-- optionally installs Cursor hooks (if Cursor is detected)
+The tray requires macOS 14+ and Xcode Command Line Tools (or full Xcode).
+The Pi extension requires Pi running Node.js 24+ and has no runtime packages
+to install. Building/testing TypeScript requires Node.js 24+ and pnpm;
+run `pnpm install`.
 
-For unattended installs, run `scripts/install.sh --all` or set
-`TOKEN_TALLY_INSTALL_NO_TUI=1`; optional harness integrations are still skipped
-when their harness is not detected.
+Both clients discover the daemon under `~/.agentsview/`, or
+`AGENTSVIEW_DATA_DIR` in their environment. To override discovery, use the
+tray's server URL setting or `AGENTSVIEW_URL` for Pi. Only unauthenticated
+HTTP(S) loopback endpoints are supported. Neither client starts, configures,
+or stops AgentsView. Configure AgentsView's archive-content and telemetry
+settings separately.
 
-Run `make doctor` to confirm everything is healthy.
+## Menu bar
 
-> **Gatekeeper note:** ToTally.app is not signed with an Apple Developer
-> certificate. On first launch macOS may block it. To allow it, open
-> **System Settings → Privacy & Security**, scroll to the "Security" section,
-> and click **Open Anyway** next to the ToTally entry.
+The app shows token/cost totals, daily costs, and top models/projects.
+**Settings → Include cached tokens** switches between all tokens and
+input + output only; costs are unchanged. “Open AgentsView” opens its Usage
+dashboard. Launch-at-login and display preferences remain local.
 
-### Updating
-
-```sh
-git pull
-make install
-```
-
-`make install` is idempotent. Run it after every `git pull` — it refreshes the
-provider pricing catalogs, migrates the database, rebuilds the app, and updates
-extension symlinks automatically. To refresh only pricing, run `make sync-pricing`.
-
----
-
-## Requirements
-
-- **macOS 14 or later**
-- **Command Line Tools for Xcode** (or full Xcode) — for the Swift build
-  - Full Xcode is required to run Swift tests (`make test`)
-- **Node.js ≥ 24** — for the store CLI
-- **pnpm** — must be installed before running `make install`
-  (`npm install -g pnpm`); used to build packages, but the installed CLI is a
-  self-contained SEA binary, not a pnpm-managed global
-
-The installer checks for these and prints a clear error if anything is missing.
-
----
-
-## What gets installed
-
-| Component | Location |
-|---|---|
-| Central database | `~/.local/share/token-tally/events.db` |
-| Tray app | `/Applications/ToTally.app` |
-| Pi writer extension | `~/.pi/agent/extensions/token-tally-writer` → `<repo>/harnesses/pi/writer-extension` |
-| Pi usage client | `~/.pi/agent/extensions/token-tally-usage` → `<repo>/clients/pi-usage-command` |
-| Claude Code hook | `~/.local/bin/token-tally-claude-hook` → `<repo>/harnesses/claude-code/writer/dist/bin/token-tally-claude-hook.js` |
-| Cursor hook | `~/.local/bin/token-tally-cursor-hook` → `<repo>/harnesses/cursor/writer/dist/bin/token-tally-cursor-hook.js` |
-| CLI binary | `~/.local/share/token-tally/bin/token-tally` (symlinked from `~/.local/bin/token-tally`) |
-| Install manifest | `~/.config/token-tally/install.json` |
-
-All extension paths are symlinks back to the repo, so `git pull && make install`
-picks up code changes without reinstalling.
-
-> **Pi is optional.** The tray app and CLI work without Pi. The Pi extensions
-> (writer and usage command) are only installed if Pi is detected.
->
-> **Claude Code and Cursor are optional.** Their hook integrations are only
-> installed when the matching harness is detected. See
-> [`docs/plugin-authoring.md`](docs/plugin-authoring.md) to integrate a
-> different harness.
-
----
-
-## Diagnostics
-
-```sh
-make doctor   # check all components
-make test     # run Swift and store tests
-```
-
-`make doctor` checks the CLI binary, database health, tray app installation, Pi
-extension symlinks, and the install manifest.
-
-`make test` runs the store, Claude Code writer, Cursor writer, and web-explorer
-server test suites, plus the Swift tray tests (requires full Xcode).
-
----
-
-## Importing legacy Pi analytics data
-
-If you used Pi's built-in analytics extension before installing ToTally, your
-historical data is at `~/.pi/analytics/events.db`. It is **never touched or
-deleted** by the installer. To migrate it into the central store:
-
-```sh
-token-tally import legacy-pi
-```
-
-The import is idempotent — running it more than once is safe. It maps the old
-schema to the central ToTally schema and records import metadata for diagnostics.
-The legacy file is left in place after import.
-
-This command is **never run automatically by the installer**. It is an explicit
-user action.
-
----
-
-## Data stored by ToTally
-
-ToTally stores **aggregate usage metadata only**. By default:
-
-**Stored:** timestamps, harness name/version, provider/model, token counts, cost
-values, session/turn/message IDs, repo owner/name/remote URL, tool names, error
-flags.
-
-**Never stored:** prompts, assistant responses, tool arguments, tool outputs,
-file contents, environment variables, secrets.
-
-See [`docs/local-data.md`](docs/local-data.md) for the complete data model and
-[`docs/schema.md`](docs/schema.md) for the database schema and versioning
-reference.
-
----
-
-## Uninstall
-
-```sh
-make uninstall
-```
-
-Removes the tray app, Pi extension symlinks, and the install manifest. **User
-data is kept** — the database, spool files, and logs at `~/.local/share/token-tally/`
-are printed but not deleted. The legacy Pi database at `~/.pi/analytics/events.db`
-is never touched.
-
-To also remove all ToTally analytics data:
-
-```sh
-scripts/uninstall.sh --purge --yes
-```
-
-See [`docs/install.md`](docs/install.md) for the full uninstall reference.
-
----
-
-## Repository layout
+## Pi
 
 ```text
-token-tally/
-  Makefile                    ← orchestrator: install / uninstall / doctor / test
-  scripts/                    ← component install/uninstall/doctor scripts
-
-  store/                      ← shared writer library and token-tally CLI
-    schema/                   ← SQL migration files
-    src/                      ← TypeScript source
-    cli/                      ← CLI entry point
-
-  harnesses/
-    pi/writer-extension/      ← Pi hook-based writer extension
-
-  clients/
-    macos-tray/               ← native macOS menu bar app (Swift/SwiftUI)
-    pi-usage-command/         ← Pi /usage and /analytics doctor commands
-
-  docs/
-    schema.md                 ← database schema and versioning reference
-    local-data.md             ← what data is and isn't stored
-    install.md                ← detailed install/uninstall reference
-    plugin-authoring.md       ← guide for writing new harness integrations
+/usage
+/usage --since=7d
+/usage --json --tab=models --since=month
 ```
 
----
+Tabs: summary, models, repos (AgentsView projects), daily.
+Use arrow keys or 1–4 to switch tabs, `s` to cycle the period, and `q`/Escape
+to close. Periods are today, past 7 calendar days, past 30 calendar days
+(`month`), or all time (default), in the local timezone. Both clients include
+automated and one-shot usage. Pi shows fresh and cached tokens separately.
 
-## Supported harnesses
+JSON uses AgentsView's native token fields and integer microdollar amounts,
+not the old ToTally SQLite query format. Pricing and incomplete/stale coverage
+notices come from AgentsView. Removed: tool/PR tabs, latest-session totals,
+`--since=24h` (use `today`), `/analytics doctor`, and `/analytics explore`.
 
-ToTally currently ships writers for:
+## Development
 
-| Harness | Integration | Notes |
-|---|---|---|
-| **Pi** | Long-lived writer extension | Full token + cost capture |
-| **Claude Code** | Hook subprocess | Tokens from JSONL transcript; Anthropic pricing table |
-| **Cursor** | Hook subprocess | Sessions/turns/tool calls captured; tokens best-effort (no counts in hook payloads); multi-provider pricing table |
+```sh
+pnpm install --frozen-lockfile
+make build       # assemble the macOS app without installing
+make test        # Pi and Swift tests
+make check       # typecheck, tests, shell checks, macOS build
+```
 
-The central store is designed for multi-harness use from day one. See
-[`docs/plugin-authoring.md`](docs/plugin-authoring.md) to write an integration
-for a new harness. OpenCode and other agents are potential future additions.
+Swift tests require full Xcode. The SDK-selection helper handles Command Line Tools versions whose
+default SwiftUI SDK requires compiler plugins only supplied by Xcode.
 
----
+Source lives in `clients/macos-tray/` and `clients/pi-usage-command/`.
+Install/build helpers live in `scripts/`.
+
+## Legacy installations and uninstalling
+
+The old store, writers, CLI, web explorer, import/backfill tools, and pricing
+sources have been removed from this repository. Historical databases are not
+deleted or imported into AgentsView. Existing collector registrations are not
+automatically migrated: remove old Pi writer links, Claude/Cursor hook entries,
+and the ToTally drain service from older installations before using them again.
+
+`make uninstall` removes the current tray app and this checkout's Pi usage
+symlink. It leaves preferences, AgentsView, historical databases, and any old
+collector installations untouched.
+
+## Project status
+
+This is a public personal project with no support, roadmap, release cadence,
+or compatibility guarantees. Issues and pull requests may not be addressed.
+If you depend on it, be prepared to maintain a fork.
 
 ## License
 

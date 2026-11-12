@@ -2,7 +2,7 @@ import Foundation
 
 /// Build-time and runtime version metadata for diagnostics.
 ///
-/// Intended for use in schema-mismatch and query-error UI states so the user
+/// Intended for use in connection-error UI states so the user
 /// can copy a complete diagnostic block when reporting issues.
 ///
 /// **How to read version information at runtime (SwiftPM executable):**
@@ -49,15 +49,15 @@ enum AppVersion {
     ///
     /// Usage:
     /// ```swift
-    /// // In EmptyStateView .schemaMismatch or ErrorStateView:
-    /// Text(AppVersion.diagnosticBlock(databasePath: path))
+    /// // In ErrorStateView:
+    /// Text(AppVersion.diagnosticBlock(serverURL: url))
     ///     .textSelection(.enabled)
     /// ```
-    static func diagnosticBlock(databasePath: String) -> String {
+    static func diagnosticBlock(serverURL: String) -> String {
         """
         ToTally — Diagnostic Info
         Version:  \(versionAndBuild)
-        Database: \(Paths.expandingTilde(databasePath))
+        AgentsView: \(serverURL.isEmpty ? "Automatic discovery" : serverURL)
         macOS:    \(ProcessInfo.processInfo.operatingSystemVersionString)
         """
     }

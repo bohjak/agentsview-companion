@@ -3,7 +3,7 @@ import SwiftUI
 /// Compact daily cost tile chart rendered in the popover.
 ///
 /// Expects the `points` array to contain one entry per calendar day, as produced
-/// by `AnalyticsQueries.fillMissingDays`. The visual style is intentionally
+/// by the AgentsView client. The visual style is intentionally
 /// similar to GitHub's contribution graph: one square per day, grouped into
 /// week columns, with fill intensity proportional to that day's cost.
 ///

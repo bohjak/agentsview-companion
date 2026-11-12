@@ -13,18 +13,17 @@ the current public state of the project.
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
 If you choose to report a security issue, use
-[GitHub private vulnerability reporting](https://github.com/bohjak/token-tally/security/advisories/new)
+[GitHub private vulnerability reporting](https://github.com/bohjak/agentsview-companion/security/advisories/new)
 when available. Reports may not be acknowledged, investigated, or fixed.
 There is no response-time or remediation guarantee.
 
 ## Scope
 
-ToTally is a local-only tool. It writes no data to the network. The primary
-attack surface is:
+ToTally's macOS app and Pi extension read AgentsView's unauthenticated local
+HTTP API. Connections are restricted to loopback endpoints and redirects are
+rejected. The clients do not collect sessions, write an analytics database, or
+send usage to an external service.
 
-- The SQLite database at `~/.local/share/token-tally/events.db`
-- The NDJSON spool files at `~/.local/share/token-tally/spool/`
-- The `token-tally` CLI binary at `~/.local/share/token-tally/bin/` (symlinked from `~/.local/bin/`)
-
-All of these are owned by and accessible only to the local user who ran
-`make install`.
+The primary boundaries are AgentsView's daemon discovery records and API
+responses, local UI preferences, and the source symlink loaded by Pi. AgentsView
+owns ingestion, storage, pricing, and its own network/telemetry configuration.

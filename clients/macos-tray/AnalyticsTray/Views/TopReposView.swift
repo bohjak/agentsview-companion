@@ -1,10 +1,6 @@
 import SwiftUI
 
-/// Lists the top five repositories by cost for the configured time window.
-///
-/// Repository labels are derived from sessions in priority order:
-/// `owner/name` → `repo_remote` → `cwd` → `"unknown"`.
-/// All cases render the same way; "unknown" is treated as a valid label.
+/// Lists AgentsView's top five projects by cost.
 struct TopReposView: View {
 
     let repos: [RepoBreakdown]
@@ -19,9 +15,9 @@ struct TopReposView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            sectionLabel("Top Repos", period: periodLabel)
+            sectionLabel("Top Projects", period: periodLabel)
             if repos.isEmpty {
-                placeholderRow("No repository data")
+                placeholderRow("No project data")
             } else {
                 ForEach(repos) { repo in
                     repoRow(repo, share: share(for: repo))
@@ -61,7 +57,7 @@ struct TopReposView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .accessibilityLabel("\(repo.repo), \(Formatters.formatCost(repo.costUSD)), \(Int((share * 100).rounded())) percent of shown repository cost")
+        .accessibilityLabel("\(repo.repo), \(Formatters.formatCost(repo.costUSD)), \(Int((share * 100).rounded())) percent of shown project cost")
     }
 
     // MARK: - Helpers

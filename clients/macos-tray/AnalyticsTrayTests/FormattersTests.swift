@@ -109,31 +109,6 @@ struct MenuBarTitleTests {
     }
 }
 
-// MARK: - Paths
-
-@Suite("Paths")
-struct PathsTests {
-
-    @Test func expandTilde() {
-        let expanded = Paths.expandingTilde("~/.local/share/token-tally/events.db")
-        #expect(!expanded.hasPrefix("~"))
-        #expect(expanded.hasSuffix("/.local/share/token-tally/events.db"))
-    }
-
-    @Test func alreadyAbsolute() {
-        let path = "/Users/test/.local/share/token-tally/events.db"
-        #expect(Paths.expandingTilde(path) == path)
-    }
-
-    @Test func analyticsFolder_isParentDirectory() {
-        // analyticsFolder returns the directory containing the DB file.
-        let folder = Paths.analyticsFolder(
-            forDatabasePath: "~/.local/share/token-tally/events.db"
-        )
-        #expect(folder.path.hasSuffix("/.local/share/token-tally"))
-    }
-}
-
 // MARK: - UsageBucket
 
 @Suite("UsageBucket")
@@ -143,20 +118,15 @@ struct UsageBucketTests {
         let b = UsageBucket.zero
         #expect(b.isEmpty)
         #expect(b.costUSD == 0)
-        #expect(b.billableTokens == 0)
-        #expect(b.cachedTokens == 0)
-        #expect(b.turns == 0)
+        #expect(b.tokens == 0)
         #expect(b.sessions == 0)
     }
 
     @Test func nonEmpty() {
         let b = UsageBucket(
-            costUSD: 1.42, billableTokens: 284_000,
-            cachedTokens: 10_000, turns: 5, sessions: 2
+            costUSD: 1.42, tokens: 284_000, uncachedTokens: 24_000, sessions: 2
         )
         #expect(!b.isEmpty)
-        // Cached tokens must stay separate from billable tokens.
-        #expect(b.billableTokens == 284_000)
-        #expect(b.cachedTokens == 10_000)
+        #expect(b.tokens == 284_000)
     }
 }

@@ -1,135 +1,28 @@
 #!/usr/bin/env bash
-# scripts/install-pi.sh — Install Pi writer and usage-command extensions.
-#
-# Installs two symlinks in ~/.pi/agent/extensions/:
-#   token-tally-writer → <repo>/harnesses/pi/writer-extension
-#   token-tally-usage  → <repo>/clients/pi-usage-command
-#
-# Idempotency: if the symlink already exists and points to the right place,
-# it is left unchanged. If it points elsewhere, it is replaced with a warning.
-#
-# Arguments:
-#   $1  REPO_ROOT — absolute path to the repository root
-#   --writer       Install only the writer extension
-#   --usage        Install only the usage command
-#
-# If neither --writer nor --usage is supplied, both are installed.
-#
-# Exit codes:
-#   0   success (both symlinks created or already correct)
-#   1   Pi not detected (extensions dir absent), or symlink creation failed
 set -euo pipefail
-
-if [[ -t 1 ]]; then
-  GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; RESET='\033[0m'
-else
-  GREEN=''; YELLOW=''; RED=''; RESET=''
-fi
-
-info()  { echo -e "  ${GREEN}✓${RESET}  $*"; }
-warn()  { echo -e "  ${YELLOW}!${RESET}  $*"; }
-err()   { echo -e "  ${RED}✗${RESET}  $*"; }
-
-# ---------------------------------------------------------------------------
-# ensure_symlink <link_path> <target_path> <label>
-# ---------------------------------------------------------------------------
-# Creates or repairs a symlink so that link_path → target_path.
-# - If the link already exists and is correct: no-op + info message.
-# - If the link exists but points elsewhere: replace + warn.
-# - If the link exists but the target does not exist: replace + warn.
-# - If a non-symlink file or directory is at link_path: error out.
-ensure_symlink() {
-  local link_path="$1"
-  local target_path="$2"
-  local label="$3"
-
-  if [[ -L "${link_path}" ]]; then
-    local current_target
-    current_target=$(readlink "${link_path}")
-    if [[ "${current_target}" == "${target_path}" && -e "${target_path}" ]]; then
-      info "${label}: already correct (${link_path})"
-      return 0
-    fi
-    warn "${label}: symlink exists but points to '${current_target}' — replacing"
-    rm "${link_path}"
-  elif [[ -e "${link_path}" ]]; then
-    err "${label}: a non-symlink file/directory exists at ${link_path}"
-    err "  Remove it manually, then re-run 'make install'."
-    return 1
-  fi
-
-  if [[ ! -e "${target_path}" ]]; then
-    err "${label}: target does not exist: ${target_path}"
-    return 1
-  fi
-
-  ln -s "${target_path}" "${link_path}"
-  info "${label}: symlinked (${link_path} → ${target_path})"
-}
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 main() {
   local repo_root="${1:?REPO_ROOT is required}"
-  shift
-
-  local install_writer=false
-  local install_usage=false
-  if [[ "$#" == "0" ]]; then
-    install_writer=true
-    install_usage=true
-  fi
-
-  local arg
-  for arg in "$@"; do
-    case "${arg}" in
-      --writer) install_writer=true ;;
-      --usage) install_usage=true ;;
-      *)
-        err "Unknown option: ${arg}"
-        return 2
-        ;;
-    esac
-  done
-
-  local pi_ext_dir="${HOME}/.pi/agent/extensions"
-
-  # If the Pi extensions directory doesn't exist, Pi is not installed.
-  if [[ ! -d "${pi_ext_dir}" ]]; then
-    warn "Pi extensions directory not found (${pi_ext_dir})"
-    warn "Install Pi first, then re-run 'make install'."
-    warn "Pi must be installed and have created ~/.pi/agent/extensions/ before this step."
+  local agent_dir="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
+  local target="${repo_root}/clients/pi-usage-command"
+  local link="${agent_dir}/extensions/token-tally-usage"
+  if [[ ! -d "${agent_dir}" || ! -f "${target}/index.ts" ]]; then
+    printf 'Pi agent directory or usage extension source not found.\n' >&2
     return 1
   fi
-
-  local writer_source="${repo_root}/harnesses/pi/writer-extension"
-  local usage_source="${repo_root}/clients/pi-usage-command"
-
-  if [[ "${install_writer}" == "true" && ! -d "${writer_source}" ]]; then
-    err "Writer extension source not found: ${writer_source}"
+  mkdir -p "${agent_dir}/extensions"
+  if [[ -L "${link}" ]]; then
+    if [[ "$(readlink "${link}")" == "${target}" ]]; then
+      printf 'Pi /usage is already linked. Reload Pi to pick up changes.\n'
+      return
+    fi
+    rm "${link}"
+  elif [[ -e "${link}" ]]; then
+    printf 'Refusing to replace non-symlink: %s\n' "${link}" >&2
     return 1
   fi
-
-  if [[ "${install_usage}" == "true" && ! -d "${usage_source}" ]]; then
-    err "Usage command source not found: ${usage_source}"
-    return 1
-  fi
-
-  if [[ "${install_writer}" == "true" ]]; then
-    ensure_symlink \
-      "${pi_ext_dir}/token-tally-writer" \
-      "${writer_source}" \
-      "Pi writer extension"
-  fi
-
-  if [[ "${install_usage}" == "true" ]]; then
-    ensure_symlink \
-      "${pi_ext_dir}/token-tally-usage" \
-      "${usage_source}" \
-      "Pi usage command"
-  fi
+  ln -s "${target}" "${link}"
+  printf 'Installed Pi /usage. Reload Pi to load the extension.\n'
 }
 
 main "$@"

@@ -71,6 +71,7 @@ final class PopoverController {
         anchorButton = button
         keepStatusItemHighlighted(button)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        hostingController.view.window?.makeFirstResponder(nil)
         installEventMonitor()
     }
 

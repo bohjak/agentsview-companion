@@ -1,12 +1,2 @@
 packages:
-  - store
-  - harnesses/kit
-  - harnesses/pi/writer-extension
-  - harnesses/claude-code/writer
-  - harnesses/cursor/writer
-  - clients/queries
   - clients/pi-usage-command
-  - clients/web-explorer
-allowBuilds:
-  better-sqlite3: true
-  esbuild: true

@@ -20,10 +20,10 @@ final class AnalyticsEnvironment: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
-    init() {
-        let s = AppSettings()
-        settings = s
-        store = AnalyticsStore(settings: s)
+    init(settings: AppSettings? = nil, client: AgentsViewClient = AgentsViewClient()) {
+        let s = settings ?? AppSettings()
+        self.settings = s
+        store = AnalyticsStore(settings: s, client: client)
 
         // Forward store changes so SwiftUI re-renders when refreshes transition
         // between idle/loading and loaded/error states.
@@ -163,17 +163,25 @@ struct PopoverView: View {
         case .loaded(let snapshot):
             summarySection(snapshot)
 
-        case .emptyDatabase:
-            EmptyStateView(kind: .emptyDatabase, onOpenSettings: openSettings)
+        case .empty:
+            EmptyStateView()
 
-        case .missingDatabase(let path):
-            EmptyStateView(kind: .missingDatabase(path: path), onOpenSettings: openSettings)
-
-        case .schemaMismatch(let detail):
-            EmptyStateView(kind: .schemaMismatch(detail: detail), onOpenSettings: openSettings)
-
-        case .queryError(let message):
-            ErrorStateView(message: message, onRefresh: { env.store.refresh() })
+        case .unavailable(let message):
+            if let snapshot = env.store.lastSnapshot {
+                VStack(alignment: .leading, spacing: 0) {
+                    Label("Disconnected — last updated \(snapshot.loadedAt.formatted(date: .abbreviated, time: .shortened))", systemImage: "exclamationmark.triangle")
+                        .fixedSize(horizontal: false, vertical: true)
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .padding(12)
+                    Button("Retry") { env.store.refresh() }
+                        .padding(.horizontal, 12)
+                    summarySection(snapshot)
+                }
+                .help(message)
+            } else {
+                ErrorStateView(message: message, onRefresh: { env.store.refresh() })
+            }
         }
     }
 
@@ -182,27 +190,11 @@ struct PopoverView: View {
     private func summarySection(_ snapshot: UsageSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
 
-            // 0. Degraded-schema banner: shown when the database schema is newer
-            // than this build's max-known version but still within the read
-            // window. The tray continues reading what it understands; the banner
-            // tells the user to run `make install` to get a matching build.
-            if snapshot.schemaIsDegraded {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.down.circle")
-                        .imageScale(.small)
-                    Text("Database schema is newer than this app — run `make install` to update ToTally")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .font(.caption2)
-                .foregroundStyle(.orange)
-                .padding(.horizontal, 2)
-            }
-
             // 1. Today summary.
             SummaryCard(
                 title: "Today",
                 bucket: snapshot.today,
-                showTurns: true,
+                includeCachedTokens: env.settings.includeCachedTokens,
                 backgroundChartValues: snapshot.intradayUsage.map(\.costUSD)
             )
 
@@ -210,7 +202,7 @@ struct PopoverView: View {
             SummaryCard(
                 title: "Past 7 days",
                 bucket: snapshot.week,
-                showTurns: false,
+                includeCachedTokens: env.settings.includeCachedTokens,
                 backgroundChartValues: Array(snapshot.dailyCost.suffix(7)).map(\.costUSD),
                 backgroundChartTrimsZeroEdges: false,
                 backgroundChartSmoothingWindow: 1
@@ -237,19 +229,11 @@ struct PopoverView: View {
                 )
             }
 
-            // 6. Unpriced-messages caveat (reader expectation #4 from docs/schema.md).
-            // Shown when messages with cost_source='unknown' exist in the week window so
-            // users are not misled into interpreting a zero-cost entry as "free".
-            if snapshot.unpricedMessages > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.circle")
-                        .imageScale(.small)
-                    Text("\(snapshot.unpricedMessages) unpriced message\(snapshot.unpricedMessages == 1 ? "" : "s") excluded from cost totals")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 2)
+            ForEach(snapshot.notices, id: \.self) { notice in
+                Label(notice, systemImage: "info.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // 7. Footer actions.
@@ -264,9 +248,9 @@ struct PopoverView: View {
     private var footerActions: some View {
         HStack(spacing: 8) {
             Button(action: openExplorer) {
-                Label("Open Explorer", systemImage: "globe")
+                Label("Open AgentsView", systemImage: "globe")
             }
-            .help("Open web analytics explorer")
+            .help("Open AgentsView usage dashboard")
 
             Spacer()
         }
@@ -299,46 +283,16 @@ struct PopoverView: View {
     }
 
     private func openExplorer() {
-        let dbPath = env.settings.databasePath
-        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
-        let installedCliPath = "\(homeDirectory)/.local/share/token-tally/bin/token-tally"
-
-        // Prefer the absolute SEA binary installed by scripts/install-store.sh.
-        // Menu bar apps launched by Finder/login services do not inherit the
-        // user's interactive shell PATH, so `/usr/bin/env token-tally` is not
-        // reliable even when `token-tally` works in Terminal.
-        let process = Process()
-        if FileManager.default.isExecutableFile(atPath: installedCliPath) {
-            process.executableURL = URL(fileURLWithPath: installedCliPath)
-            process.arguments = ["explore", "--db", dbPath]
-        } else {
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["token-tally", "explore", "--db", dbPath]
-            var environment = ProcessInfo.processInfo.environment
-            environment["PATH"] = "\(homeDirectory)/.local/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-            process.environment = environment
-        }
-
-        // Fire-and-forget: the explorer server is intentionally long-lived
-        // (it exits after its own idle timeout or on --stop). Redirect stdio
-        // to /dev/null so the child inherits no open file descriptors from
-        // the tray process. We do NOT call waitUntilExit().
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-        } catch {
-            let alert = NSAlert()
-            alert.messageText = "token-tally not found"
-            alert.informativeText =
-                "The token-tally CLI could not be launched.\n\n" +
-                "Run 'make install' with the macOS tray component selected " +
-                "to install it, then relaunch the app."
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
+        Task { @MainActor in
+            do {
+                let url = try await AgentsViewClient().resolveServer(override: env.settings.serverURL)
+                NSWorkspace.shared.open(url.appendingPathComponent("usage"))
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "AgentsView unavailable"
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
         }
     }
 

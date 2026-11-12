@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - TopListsPeriod
 
-/// Controls the time window used for the "Top Models" and "Top Repos" sections
+/// Controls the time window used for the "Top Models" and "Top Projects" sections
 /// in the tray popover.
 enum TopListsPeriod: String, CaseIterable, Identifiable {
     /// Show data for calendar today (since local midnight).
@@ -63,29 +63,31 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
 /// All keys are namespaced under `"com.token-tally."` to avoid collisions
 /// with other apps that share the default `UserDefaults` suite.
 ///
-/// `AnalyticsStore` reads `databasePath`, `refreshInterval`, and
-/// `menuBarDisplayMode` directly. Changing `databasePath` or `refreshInterval`
+/// `AnalyticsStore` reads `serverURL`, `refreshInterval`, and
+/// `menuBarDisplayMode` directly. Changing `serverURL` or `refreshInterval`
 /// triggers a store restart.
+@MainActor
 final class AppSettings: ObservableObject {
+    private let defaults: UserDefaults
 
     // MARK: UserDefaults keys
 
     private enum Key {
-        static let databasePath       = "com.token-tally.databasePath"
+        static let serverURL          = "com.token-tally.serverURL"
         static let refreshInterval    = "com.token-tally.refreshInterval"
         static let menuBarDisplayMode = "com.token-tally.menuBarDisplayMode"
+        static let includeCachedTokens = "com.token-tally.includeCachedTokens"
         static let launchAtLogin      = "com.token-tally.launchAtLogin"
         static let topListsPeriod     = "com.token-tally.topListsPeriod"
     }
 
     // MARK: Defaults
 
-    /// Central ToTally database path, XDG-aware (honors `$XDG_DATA_HOME`).
-    /// Computed so it reflects the runtime environment, not a build-time constant.
-    static var defaultDatabasePath: String { AnalyticsQueries.defaultDatabasePath() }
+    static let defaultServerURL = ""
 
     static let defaultRefreshInterval: TimeInterval = 60
     static let defaultMenuBarDisplayMode: MenuBarDisplayMode = .combinedTokensCost
+    static let defaultIncludeCachedTokens = true
 
     /// Launch at login is enabled by default — ToTally is only useful as a
     /// persistent menu bar presence and has no value if it doesn't auto-start.
@@ -95,62 +97,70 @@ final class AppSettings: ObservableObject {
 
     // MARK: Published properties
 
-    /// Path to the SQLite database (tilde-containing paths are accepted).
-    /// Changing this triggers a store refresh via the AnalyticsStore subscriber.
-    @Published var databasePath: String {
-        didSet { UserDefaults.standard.set(databasePath, forKey: Key.databasePath) }
+    /// Empty selects the running AgentsView daemon in its local data directory.
+    @Published var serverURL: String {
+        didSet { defaults.set(serverURL, forKey: Key.serverURL) }
     }
 
     /// How often (in seconds) the background timer refreshes data.
     @Published var refreshInterval: TimeInterval {
-        didSet { UserDefaults.standard.set(refreshInterval, forKey: Key.refreshInterval) }
+        didSet { defaults.set(refreshInterval, forKey: Key.refreshInterval) }
     }
 
     /// What the menu bar label shows.
     @Published var menuBarDisplayMode: MenuBarDisplayMode {
         didSet {
-            UserDefaults.standard.set(menuBarDisplayMode.rawValue, forKey: Key.menuBarDisplayMode)
+            defaults.set(menuBarDisplayMode.rawValue, forKey: Key.menuBarDisplayMode)
         }
+    }
+
+    @Published var includeCachedTokens: Bool {
+        didSet { defaults.set(includeCachedTokens, forKey: Key.includeCachedTokens) }
     }
 
     /// Whether the app registers itself as a login item.
     /// Registration is best-effort; failures are handled by the caller.
     @Published var launchAtLogin: Bool {
-        didSet { UserDefaults.standard.set(launchAtLogin, forKey: Key.launchAtLogin) }
+        didSet { defaults.set(launchAtLogin, forKey: Key.launchAtLogin) }
     }
 
-    /// Time window used for the "Top Models" and "Top Repos" sections in the popover.
+    /// Time window used for the "Top Models" and "Top Projects" sections in the popover.
     @Published var topListsPeriod: TopListsPeriod {
         didSet {
-            UserDefaults.standard.set(topListsPeriod.rawValue, forKey: Key.topListsPeriod)
+            defaults.set(topListsPeriod.rawValue, forKey: Key.topListsPeriod)
         }
     }
 
     // MARK: Init
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         // Load persisted values, falling back to defaults for missing keys.
-        databasePath = UserDefaults.standard.string(forKey: Key.databasePath)
-            ?? AppSettings.defaultDatabasePath
+        serverURL = defaults.string(forKey: Key.serverURL)
+            ?? AppSettings.defaultServerURL
 
-        let storedInterval = UserDefaults.standard.double(forKey: Key.refreshInterval)
+        let storedInterval = defaults.double(forKey: Key.refreshInterval)
         // double(forKey:) returns 0 when the key is absent.
         refreshInterval = storedInterval > 0
             ? storedInterval
             : AppSettings.defaultRefreshInterval
 
-        if let raw = UserDefaults.standard.string(forKey: Key.menuBarDisplayMode),
+        if let raw = defaults.string(forKey: Key.menuBarDisplayMode),
            let mode = MenuBarDisplayMode(rawValue: raw) {
             menuBarDisplayMode = mode
         } else {
             menuBarDisplayMode = AppSettings.defaultMenuBarDisplayMode
         }
 
-        launchAtLogin = UserDefaults.standard.object(forKey: Key.launchAtLogin) != nil
-            ? UserDefaults.standard.bool(forKey: Key.launchAtLogin)
+        includeCachedTokens = defaults.object(forKey: Key.includeCachedTokens) != nil
+            ? defaults.bool(forKey: Key.includeCachedTokens)
+            : AppSettings.defaultIncludeCachedTokens
+
+        launchAtLogin = defaults.object(forKey: Key.launchAtLogin) != nil
+            ? defaults.bool(forKey: Key.launchAtLogin)
             : AppSettings.defaultLaunchAtLogin
 
-        if let raw = UserDefaults.standard.string(forKey: Key.topListsPeriod),
+        if let raw = defaults.string(forKey: Key.topListsPeriod),
            let period = TopListsPeriod(rawValue: raw) {
             topListsPeriod = period
         } else {
@@ -159,21 +169,22 @@ final class AppSettings: ObservableObject {
 
         // Remove the retired harness filter preference so old installations do
         // not keep stale settings that no longer have UI.
-        UserDefaults.standard.removeObject(forKey: "com.token-tally.enabledHarnesses")
+        defaults.removeObject(forKey: "com.token-tally.enabledHarnesses")
     }
 
     // MARK: Reset
 
     /// Resets all settings to their defaults and removes persisted values.
     func resetToDefaults() {
-        [Key.databasePath, Key.refreshInterval,
-         Key.menuBarDisplayMode, Key.launchAtLogin, Key.topListsPeriod].forEach {
-            UserDefaults.standard.removeObject(forKey: $0)
+        [Key.serverURL, Key.refreshInterval,
+         Key.menuBarDisplayMode, Key.includeCachedTokens, Key.launchAtLogin, Key.topListsPeriod].forEach {
+            defaults.removeObject(forKey: $0)
         }
-        UserDefaults.standard.removeObject(forKey: "com.token-tally.enabledHarnesses")
-        databasePath = AppSettings.defaultDatabasePath
+        defaults.removeObject(forKey: "com.token-tally.enabledHarnesses")
+        serverURL = AppSettings.defaultServerURL
         refreshInterval = AppSettings.defaultRefreshInterval
         menuBarDisplayMode = AppSettings.defaultMenuBarDisplayMode
+        includeCachedTokens = AppSettings.defaultIncludeCachedTokens
         launchAtLogin = AppSettings.defaultLaunchAtLogin
         topListsPeriod = AppSettings.defaultTopListsPeriod
     }

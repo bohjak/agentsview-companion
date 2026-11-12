@@ -1,237 +1,58 @@
-/**
- * Human-readable text formatting for /usage command output.
- *
- * These functions are used in the "fallback" interactive path when Pi's
- * ctx.ui.custom is not available (e.g. -p / print mode, RPC mode, test stubs).
- * The JSON path skips all formatting and calls JSON.stringify directly.
- *
- * All cost values are already in display-USD (converted from micros at the
- * query layer). Functions here do no currency arithmetic.
- */
-
 import type { UsageTab } from "./queries.ts";
+import type { Tokens, UsageReply } from "./agentsview.ts";
 
-// ---------------------------------------------------------------------------
-// Simple table helpers
-// ---------------------------------------------------------------------------
-
-/** Right-align a value in a fixed-width column, truncating if too long. */
-function r(val: unknown, width: number): string {
-  const s = String(val ?? "");
-  return s.padStart(width).slice(-width);
+function usd(microdollars: number): string {
+  return `$${(microdollars / 1_000_000).toFixed(4)}`;
 }
 
-/** Left-align a value in a fixed-width column, truncating if too long. */
-function l(val: unknown, width: number): string {
-  const s = String(val ?? "");
-  return s.padEnd(width).slice(0, width);
+function tokens(value: number): string {
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
-function fmtUsd(n: number): string {
-  return `$${n.toFixed(4)}`;
+function tokenColumns(row: Tokens): string {
+  return `${tokens(row.inputTokens + row.outputTokens).padStart(9)} ${tokens(row.cacheCreationTokens + row.cacheReadTokens).padStart(9)}`;
 }
 
-function fmtTokens(n: number): string {
-  const megaTokens = n / 1_000_000;
-  if (n < 1_000_000) return `${megaTokens.toFixed(2)}M`;
-  return `${megaTokens.toFixed(1)}M`;
-}
-
-function fmtPct(n: number): string {
-  return `${(n * 100).toFixed(1)}%`;
-}
-
-// ---------------------------------------------------------------------------
-// Tab renderers
-// ---------------------------------------------------------------------------
-
-function renderSummary(data: unknown): string {
-  const d = data as {
-    today: { cost_usd: number; billable_tokens: number; turns: number; sessions: number; unpriced_count: number };
-    week:  { cost_usd: number; billable_tokens: number; turns: number; sessions: number; unpriced_count: number };
-    month: { cost_usd: number; billable_tokens: number; turns: number; sessions: number; unpriced_count: number };
-    session: { cost_usd: number; billable_tokens: number; turns: number; unpriced_count: number };
-    top_model: { model_id: string; cost_usd: number; turns: number } | null;
-    harnesses: Array<{ name: string; display_name: string }>;
-  };
-
-  const lines: string[] = [];
-  lines.push("╭──────────────────── ToTally Usage Summary ─────────────────────╮");
-  lines.push(`│ ${"Window".padEnd(10)} ${"Cost (USD)".padStart(12)} ${"Tokens".padStart(12)} ${"Turns".padStart(7)} ${"Unpriced".padStart(9)} │`);
-  lines.push("├────────────────────────────────────────────────────────────────┤");
-
-  for (const [label, b] of [
-    ["Today",   d.today],
-    ["Week",    d.week],
-    ["Month",   d.month],
-    ["Session", d.session],
-  ] as const) {
-    const bucket = b as typeof d.today;
-    const unpriced = bucket.unpriced_count > 0 ? `${bucket.unpriced_count}⚠` : "—";
-    lines.push(
-      `│ ${l(label, 10)} ${r(fmtUsd(bucket.cost_usd), 12)} ${r(fmtTokens(bucket.billable_tokens), 12)} ` +
-      `${r(bucket.turns, 7)} ${r(unpriced, 9)} │`
-    );
-  }
-
-  if (d.top_model != null) {
-    lines.push("├────────────────────────────────────────────────────────────────┤");
-    lines.push(
-      `│ Top model: ${l(`${d.top_model.model_id} (${fmtUsd(d.top_model.cost_usd)}, ${d.top_model.turns} turns)`, 51)} │`
-    );
-  }
-
-  if (d.harnesses.length > 0) {
-    const harnessNames = d.harnesses.map((h) => h.display_name).join(", ");
-    lines.push("├────────────────────────────────────────────────────────────────┤");
-    lines.push(`│ Sources: ${l(harnessNames, 54)} │`);
-  }
-
-  lines.push("╰────────────────────────────────────────────────────────────────╯");
-  lines.push("⚠ = messages with unknown cost provenance, excluded from totals.");
-  return lines.join("\n");
-}
-
-function renderModels(data: unknown): string {
-  const { rows, unpriced_count } = data as {
-    rows: Array<{
-      model_id: string;
-      harness_id: string;
-      cost_usd: number;
-      billable_tokens: number;
-      turns: number;
-      share: number;
-      avg_tokens_per_turn: number;
-    }>;
-    unpriced_count: number;
-  };
-
-  const lines: string[] = [];
-  lines.push(
-    `${l("Model", 28)} ${l("Harness", 12)} ${r("Cost", 10)} ${r("Share", 7)} ${r("Turns", 6)} ${r("Avg tok/turn", 13)}`
-  );
-  lines.push("─".repeat(80));
-  for (const row of rows) {
-    lines.push(
-      `${l(row.model_id, 28)} ${l(row.harness_id, 12)} ${r(fmtUsd(row.cost_usd), 10)} ` +
-      `${r(fmtPct(row.share), 7)} ${r(row.turns, 6)} ${r(fmtTokens(row.avg_tokens_per_turn), 13)}`
-    );
-  }
-  if (unpriced_count > 0) {
-    lines.push("");
-    lines.push(`⚠ ${unpriced_count} message(s) have unknown cost provenance and are excluded from totals.`);
-  }
-  return lines.join("\n");
-}
-
-function renderRepos(data: unknown): string {
-  const { rows } = data as {
-    rows: Array<{
-      repo: string;
-      harness_id: string;
-      cost_usd: number;
-      billable_tokens: number;
-      sessions: number;
-    }>;
-  };
-
-  const lines: string[] = [];
-  lines.push(
-    `${l("Repo", 38)} ${l("Harness", 12)} ${r("Cost", 10)} ${r("Sessions", 9)}`
-  );
-  lines.push("─".repeat(73));
-  for (const row of rows) {
-    lines.push(
-      `${l(row.repo, 38)} ${l(row.harness_id, 12)} ${r(fmtUsd(row.cost_usd), 10)} ${r(row.sessions, 9)}`
-    );
-  }
-  if (rows.length === 0) {
-    lines.push("No repository data available.");
-  }
-  return lines.join("\n");
-}
-
-function renderTools(data: unknown): string {
-  const { rows } = data as {
-    rows: Array<{
-      tool_name: string;
-      calls: number;
-      errors: number;
-      error_rate: number;
-      p50_ms: number;
-      p95_ms: number;
-    }>;
-  };
-
-  const lines: string[] = [];
-  lines.push(
-    `${l("Tool", 24)} ${r("Calls", 7)} ${r("Errors", 7)} ${r("Err%", 6)} ${r("p50ms", 7)} ${r("p95ms", 7)}`
-  );
-  lines.push("─".repeat(62));
-  for (const row of rows) {
-    lines.push(
-      `${l(row.tool_name, 24)} ${r(row.calls, 7)} ${r(row.errors, 7)} ` +
-      `${r(fmtPct(row.error_rate), 6)} ${r(row.p50_ms, 7)} ${r(row.p95_ms, 7)}`
-    );
-  }
-  if (rows.length === 0) {
-    lines.push("No tool-call data available.");
-  }
-  return lines.join("\n");
-}
-
-function renderPrs(data: unknown): string {
-  const { note } = data as { rows: unknown[]; note: string };
-  return `ℹ  ${note}`;
-}
-
-function renderDaily(data: unknown): string {
-  const { rows, unpriced_count } = data as {
-    rows: Array<{ date: string; cost_usd: number; billable_tokens: number; turns: number }>;
-    unpriced_count: number;
-  };
-
-  const maxCost = Math.max(...rows.map((r) => r.cost_usd), 0.0001);
-  const blocks = " ▁▂▃▄▅▆▇█";
-  // Newest-first from query; reverse for the sparkline so left = oldest.
-  const spark = [...rows]
-    .slice(0, 30)
-    .reverse()
-    .map((r) => blocks[Math.min(8, Math.floor((r.cost_usd / maxCost) * 8))])
-    .join("");
-
-  const lines: string[] = [];
-  lines.push(`Sparkline (last 30d): ${spark}`);
-  lines.push("");
-  lines.push(`${l("Date", 12)} ${r("Cost (USD)", 12)} ${r("Tokens", 12)} ${r("Turns", 6)}`);
-  lines.push("─".repeat(46));
-  for (const row of rows) {
-    lines.push(
-      `${l(row.date, 12)} ${r(fmtUsd(row.cost_usd), 12)} ${r(fmtTokens(row.billable_tokens), 12)} ${r(row.turns, 6)}`
-    );
-  }
-  if (unpriced_count > 0) {
-    lines.push("");
-    lines.push(`⚠ ${unpriced_count} message(s) with unknown cost provenance excluded from totals.`);
-  }
-  return lines.join("\n");
-}
-
-// ---------------------------------------------------------------------------
-// Public render dispatch
-// ---------------------------------------------------------------------------
-
-/**
- * Renders query result data as a human-readable multi-line string.
- * The `tab` argument selects which renderer to use.
- */
-export function renderTab(tab: UsageTab, data: unknown): string {
+export function tabData(tab: UsageTab, reply: UsageReply): Record<string, unknown> {
+  const { report, notices } = reply;
+  const common = { from: report.from, to: report.to, notices, pricing: report.pricing };
   switch (tab) {
-    case "summary": return renderSummary(data);
-    case "models":  return renderModels(data);
-    case "repos":   return renderRepos(data);
-    case "tools":   return renderTools(data);
-    case "prs":     return renderPrs(data);
-    case "daily":   return renderDaily(data);
+    case "summary": return { ...common, totals: report.totals, sessionCounts: report.sessionCounts, agentTotals: report.agentTotals };
+    case "models": return { ...common, rows: report.modelTotals };
+    case "repos": return { ...common, rows: report.projectTotals };
+    case "daily": return { ...common, rows: report.daily };
   }
+}
+
+export function renderTab(tab: UsageTab, reply: UsageReply): string {
+  const { report, notices } = reply;
+  const lines = [`ToTally · AgentsView · ${report.from || "all time"} → ${report.to}`, ""];
+  if (tab === "summary") {
+    lines.push(
+      `Cost: ${usd(report.totals.totalCost.microdollars)}    Sessions: ${report.sessionCounts.total}`,
+      `Fresh tokens: ${tokens(report.totals.inputTokens + report.totals.outputTokens)}`,
+      `Cached tokens: ${tokens(report.totals.cacheCreationTokens + report.totals.cacheReadTokens)}`,
+      `Sources: ${report.agentTotals.map((row) => row.agent).join(", ") || "none"}`,
+    );
+  } else {
+    lines.push(`${(tab === "models" ? "Model" : tab === "repos" ? "Project" : "Date").padEnd(30)} ${"Cost USD".padStart(12)} ${"Fresh".padStart(9)} ${"Cached".padStart(9)}`);
+    lines.push("─".repeat(65));
+    const rows = tab === "models"
+      ? report.modelTotals.map((row) => ({ label: row.model, cost: row.cost.microdollars, row }))
+      : tab === "repos"
+        ? report.projectTotals.map((row) => ({ label: row.project, cost: row.cost.microdollars, row }))
+        : report.daily.map((row) => ({ label: row.date, cost: row.totalCost.microdollars, row }));
+    rows.sort(tab === "daily" ? (a, b) => a.label.localeCompare(b.label) : (a, b) => b.cost - a.cost);
+    for (const { label, cost, row } of rows) {
+      lines.push(`${label.slice(0, 30).padEnd(30)} ${usd(cost).padStart(12)} ${tokenColumns(row)}`);
+    }
+    if (!rows.length) lines.push("No usage for this period.");
+    if (tab === "daily" && rows.length) {
+      const max = Math.max(...rows.map((row) => row.cost));
+      const bars = "▁▂▃▄▅▆▇█";
+      lines.push("", rows.map(({ cost }) => bars[max > 0 ? Math.round(cost / max * 7) : 0]).join(""));
+    }
+  }
+  if (notices.length) lines.push("", ...notices.map((notice) => `⚠ ${notice}`));
+  return lines.map((line) => line.replace(/[\u0000-\u001f\u007f-\u009f]/g, "")).join("\n");
 }

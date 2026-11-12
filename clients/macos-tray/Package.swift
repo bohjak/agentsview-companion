@@ -28,7 +28,6 @@ let package = Package(
             name: "AnalyticsTrayTests",
             dependencies: ["AnalyticsTray"],
             path: "AnalyticsTrayTests",
-            exclude: ["Fixtures"],
             // The Swift Testing framework ships with the Command Line Tools at
             // /Library/Developer/CommandLineTools/Library/Developer/Frameworks/Testing.framework.
             // The unsafeFlags below make `import Testing` available at compile time on

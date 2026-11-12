@@ -19,37 +19,32 @@ those changes yourself.
 ## Development notes for forks
 
 ```sh
-git clone https://github.com/bohjak/token-tally
-cd token-tally
-pnpm install
+git clone https://github.com/bohjak/agentsview-companion
+cd agentsview-companion
+n exec auto pnpm install
 ```
 
-To build and test the store package:
+To typecheck and test the Pi usage extension:
 
 ```sh
-cd store
-pnpm build
-pnpm test
+n exec auto pnpm --filter @token-tally/pi-usage-command typecheck
+n exec auto pnpm --filter @token-tally/pi-usage-command test
 ```
 
 To build the macOS tray app:
 
 ```sh
-swift build --package-path clients/macos-tray
-swift test  --package-path clients/macos-tray
+make build
+make test
 ```
 
 General conventions:
 
-- TypeScript: follow the existing patterns; run `pnpm typecheck` before
-  committing.
+- Run `make check` before committing.
 - Swift: follow the existing SwiftUI patterns in `clients/macos-tray/`.
 - Shell scripts: POSIX-compatible where possible; use `shellcheck` if
   available.
 - Keep commits atomic — one logical change per commit.
-
-For harness integrations, see [`docs/plugin-authoring.md`](docs/plugin-authoring.md).
-For schema changes, see [`docs/schema.md`](docs/schema.md).
 
 ## License
 

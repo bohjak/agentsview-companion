@@ -1,14 +1,12 @@
 import SwiftUI
 
-/// Shown when a SQLite open or query failure occurs that is not covered by the
-/// more specific `EmptyStateView` cases (missing database, schema mismatch).
+/// Shown when AgentsView cannot supply usage data.
 ///
 /// Displays a compact error message and a Refresh button so the user can retry
 /// without relaunching the app.
 struct ErrorStateView: View {
 
-    /// Human-readable error description. Comes from `SQLiteError.localizedDescription`
-    /// or any other `Error.localizedDescription` surfaced by `AnalyticsStore`.
+    /// Connection or API error surfaced by the store.
     let message: String
 
     /// Called when the user taps Refresh. Should invoke `AnalyticsStore.refresh()`.
