@@ -26,7 +26,7 @@ export function tabData(tab: UsageTab, reply: UsageReply): Record<string, unknow
 
 export function renderTab(tab: UsageTab, reply: UsageReply): string {
   const { report, notices } = reply;
-  const lines = [`ToTally · AgentsView · ${report.from || "all time"} → ${report.to}`, ""];
+  const lines = [`AgentsView Companion · AgentsView · ${report.from || "all time"} → ${report.to}`, ""];
   if (tab === "summary") {
     lines.push(
       `Cost: ${usd(report.totals.totalCost.microdollars)}    Sessions: ${report.sessionCounts.total}`,

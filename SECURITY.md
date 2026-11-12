@@ -19,7 +19,7 @@ There is no response-time or remediation guarantee.
 
 ## Scope
 
-ToTally's macOS app and Pi extension read AgentsView's unauthenticated local
+AgentsView Companion's macOS app and Pi extension read AgentsView's unauthenticated local
 HTTP API. Connections are restricted to loopback endpoints and redirects are
 rejected. The clients do not collect sessions, write an analytics database, or
 send usage to an external service.

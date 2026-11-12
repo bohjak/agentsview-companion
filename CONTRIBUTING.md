@@ -27,8 +27,8 @@ n exec auto pnpm install
 To typecheck and test the Pi usage extension:
 
 ```sh
-n exec auto pnpm --filter @token-tally/pi-usage-command typecheck
-n exec auto pnpm --filter @token-tally/pi-usage-command test
+n exec auto pnpm --filter @agentsview-companion/pi-usage-command typecheck
+n exec auto pnpm --filter @agentsview-companion/pi-usage-command test
 ```
 
 To build the macOS tray app:

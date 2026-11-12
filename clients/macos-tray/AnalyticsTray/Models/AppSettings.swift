@@ -58,9 +58,9 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
 
 // MARK: - AppSettings
 
-/// Persisted user preferences for ToTally. Backed by `UserDefaults`.
+/// Persisted user preferences for AgentsView Companion. Backed by `UserDefaults`.
 ///
-/// All keys are namespaced under `"com.token-tally."` to avoid collisions
+/// All keys are namespaced under `"com.bohjak.agentsview-companion."` to avoid collisions
 /// with other apps that share the default `UserDefaults` suite.
 ///
 /// `AnalyticsStore` reads `serverURL`, `refreshInterval`, and
@@ -73,12 +73,12 @@ final class AppSettings: ObservableObject {
     // MARK: UserDefaults keys
 
     private enum Key {
-        static let serverURL          = "com.token-tally.serverURL"
-        static let refreshInterval    = "com.token-tally.refreshInterval"
-        static let menuBarDisplayMode = "com.token-tally.menuBarDisplayMode"
-        static let includeCachedTokens = "com.token-tally.includeCachedTokens"
-        static let launchAtLogin      = "com.token-tally.launchAtLogin"
-        static let topListsPeriod     = "com.token-tally.topListsPeriod"
+        static let serverURL          = "com.bohjak.agentsview-companion.serverURL"
+        static let refreshInterval    = "com.bohjak.agentsview-companion.refreshInterval"
+        static let menuBarDisplayMode = "com.bohjak.agentsview-companion.menuBarDisplayMode"
+        static let includeCachedTokens = "com.bohjak.agentsview-companion.includeCachedTokens"
+        static let launchAtLogin      = "com.bohjak.agentsview-companion.launchAtLogin"
+        static let topListsPeriod     = "com.bohjak.agentsview-companion.topListsPeriod"
     }
 
     // MARK: Defaults
@@ -89,7 +89,7 @@ final class AppSettings: ObservableObject {
     static let defaultMenuBarDisplayMode: MenuBarDisplayMode = .combinedTokensCost
     static let defaultIncludeCachedTokens = true
 
-    /// Launch at login is enabled by default — ToTally is only useful as a
+    /// Launch at login is enabled by default — AgentsView Companion is only useful as a
     /// persistent menu bar presence and has no value if it doesn't auto-start.
     /// Users can disable it from Settings.
     static let defaultLaunchAtLogin = true
@@ -166,10 +166,6 @@ final class AppSettings: ObservableObject {
         } else {
             topListsPeriod = AppSettings.defaultTopListsPeriod
         }
-
-        // Remove the retired harness filter preference so old installations do
-        // not keep stale settings that no longer have UI.
-        defaults.removeObject(forKey: "com.token-tally.enabledHarnesses")
     }
 
     // MARK: Reset
@@ -180,7 +176,6 @@ final class AppSettings: ObservableObject {
          Key.menuBarDisplayMode, Key.includeCachedTokens, Key.launchAtLogin, Key.topListsPeriod].forEach {
             defaults.removeObject(forKey: $0)
         }
-        defaults.removeObject(forKey: "com.token-tally.enabledHarnesses")
         serverURL = AppSettings.defaultServerURL
         refreshInterval = AppSettings.defaultRefreshInterval
         menuBarDisplayMode = AppSettings.defaultMenuBarDisplayMode

@@ -20,7 +20,7 @@ struct SettingsView: View {
             } header: {
                 Text("AgentsView")
             } footer: {
-                Text("Leave blank to discover the running local daemon. Start AgentsView separately; ToTally does not manage it.")
+                Text("Leave blank to discover the running local daemon. Start AgentsView separately; AgentsView Companion does not manage it.")
             }
             Section("Refresh") {
                 Picker("Interval", selection: $settings.refreshInterval) {

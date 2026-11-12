@@ -6,11 +6,8 @@ SHELL := /bin/bash
 # or from the repo root with --package-path:
 #   swift build --package-path clients/macos-tray
 #
-# The SwiftPM target and compiled binary keep the name "AnalyticsTray" for
-# historical reasons.  The installed .app bundle is "ToTally.app"; the
-# binary is renamed to "ToTally" when copied into the bundle (macOS uses
-# the bundle directory name to locate the executable when CFBundleExecutable
-# is absent from Info.plist).
+# The SwiftPM target is AnalyticsTray; CFBundleExecutable names the packaged
+# binary AgentsViewCompanion inside AgentsView Companion.app.
 #
 # For production installs prefer the top-level `make install` which delegates
 # to scripts/install-tray.sh and handles atomic replacement + app restart.
@@ -19,9 +16,9 @@ SHELL := /bin/bash
 SWIFT_EXECUTABLE    := AnalyticsTray
 
 # User-visible app bundle / install names.
-APP_NAME            := ToTally
-APP_DISPLAY_NAME    := ToTally
-BUNDLE_NAME         := $(APP_NAME).app
+APP_NAME            := AgentsViewCompanion
+APP_DISPLAY_NAME    := AgentsView Companion
+BUNDLE_NAME         := $(APP_DISPLAY_NAME).app
 
 BUILD_CONFIGURATION := release
 BUILD_DIR           := .build/$(BUILD_CONFIGURATION)

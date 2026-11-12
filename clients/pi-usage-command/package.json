@@ -1,5 +1,5 @@
 {
-  "name": "@token-tally/pi-usage-command",
+  "name": "@agentsview-companion/pi-usage-command",
   "version": "0.1.0",
   "description": "Pi /usage frontend for the local AgentsView API",
   "type": "module",

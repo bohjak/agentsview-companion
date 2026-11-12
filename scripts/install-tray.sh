@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# scripts/install-tray.sh — Build and atomically install ToTally.app.
+# scripts/install-tray.sh — Build and atomically install AgentsView Companion.app.
 #
 # Responsibilities:
 #   1. Build the Swift tray app in release configuration.
-#   2. Assemble the app bundle as ToTally.app under clients/macos-tray/dist/.
-#   3. Atomically install the bundle to /Applications/ToTally.app.
+#   2. Assemble the app bundle as AgentsView Companion.app under clients/macos-tray/dist/.
+#   3. Atomically install the bundle to /Applications/AgentsView Companion.app.
 #   4. Stop any running instance first so the binary can be replaced.
 #   5. Launch the newly-installed app (which self-registers for launch-at-login
 #      on first run because AppSettings.defaultLaunchAtLogin = true).
@@ -16,7 +16,7 @@
 #   clients/macos-tray/Package.swift
 #   clients/macos-tray/.build/release/AnalyticsTray   ← compiled binary
 #   clients/macos-tray/AnalyticsTray/Resources/Info.plist
-#   clients/macos-tray/dist/ToTally.app               ← assembled bundle
+#   clients/macos-tray/dist/AgentsView Companion.app               ← assembled bundle
 #
 # Exit codes:
 #   0   success
@@ -25,9 +25,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-BUNDLE_NAME="ToTally.app"
-APP_NAME="ToTally"
-BUNDLE_ID="com.token-tally.ToTally"
+BUNDLE_NAME="AgentsView Companion.app"
+APP_NAME="AgentsViewCompanion"
+BUNDLE_ID="com.bohjak.agentsview-companion"
 INSTALL_DIR="/Applications"
 
 if [[ -t 1 ]]; then
@@ -44,10 +44,8 @@ err()   { echo -e "  ${RED}✗${RESET}  $*"; }
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Build the .app bundle into dist/ToTally.app.
-# The Swift target is named "AnalyticsTray" by SwiftPM; we rename the binary
-# to "ToTally" inside the bundle because macOS uses CFBundleExecutable (or the
-# bundle name when that key is absent) to find the executable.
+# Build the .app bundle into dist/AgentsView Companion.app.
+# CFBundleExecutable names the packaged binary independently of the bundle.
 build_bundle() {
   local tray_dir="$1"
 
@@ -78,11 +76,8 @@ build_bundle() {
   rm -rf "${bundle_dir}"
   mkdir -p "${macos_dir}" "${resources_dir}"
 
-  # Rename binary from AnalyticsTray → ToTally so macOS finds it when there
-  # is no explicit CFBundleExecutable key in Info.plist (macOS defaults to
-  # the bundle directory name without the .app suffix).
-  cp "${binary}" "${macos_dir}/ToTally"
-  chmod 755 "${macos_dir}/ToTally"
+  cp "${binary}" "${macos_dir}/${APP_NAME}"
+  chmod 755 "${macos_dir}/${APP_NAME}"
 
   cp "${tray_dir}/AnalyticsTray/Resources/Info.plist" "${contents_dir}/Info.plist"
 
@@ -93,7 +88,7 @@ build_bundle() {
   info "Bundle assembled at ${bundle_dir}"
 }
 
-# Atomically replace /Applications/ToTally.app using a temp path so that a
+# Atomically replace /Applications/AgentsView Companion.app using a temp path so that a
 # crash during install doesn't leave a half-overwritten bundle.
 atomic_install() {
   local bundle_dir="$1"
@@ -103,13 +98,13 @@ atomic_install() {
     err "Do NOT run 'sudo make install' — that runs the entire build chain as root."
     err ""
     err "Option A — admin-copy only the already-built bundle (preferred):"
-    err "    sudo cp -R '${bundle_dir}' /Applications/ToTally.app"
+    err "    sudo cp -R '${bundle_dir}' '/Applications/AgentsView Companion.app'"
     err ""
     err "Option B — install manually from Finder:"
     err "    open '${bundle_dir%/*}'"
-    err "    then drag ToTally.app into /Applications when prompted."
+    err "    then drag AgentsView Companion.app into /Applications when prompted."
     err ""
-    err "(ToTally does NOT silently fall back to ~/Applications.)"
+    err "(AgentsView Companion does NOT silently fall back to ~/Applications.)"
     return 1
   fi
 
@@ -123,7 +118,7 @@ atomic_install() {
   info "Installed ${INSTALL_DIR}/${BUNDLE_NAME}"
 }
 
-# Return success when a ToTally process is currently running.
+# Return success when an AgentsView Companion process is currently running.
 is_app_running() {
   if command -v pgrep &>/dev/null; then
     pgrep -x "${APP_NAME}" >/dev/null 2>&1
@@ -142,7 +137,7 @@ is_app_running() {
   return 1
 }
 
-# Wait up to ~5 seconds for ToTally to exit.
+# Wait up to ~5 seconds for AgentsView Companion to exit.
 wait_for_app_exit() {
   local _
   for _ in {1..20}; do
@@ -155,37 +150,37 @@ wait_for_app_exit() {
   return 1
 }
 
-# Stop a running instance of ToTally so the binary can be replaced. Prefer a
+# Stop a running instance of AgentsView Companion so the binary can be replaced. Prefer a
 # graceful quit first, then force-kill if the menu bar app does not exit.
 stop_if_running() {
   if ! is_app_running; then
     return 0
   fi
 
-  echo "  Stopping running ToTally instance…"
+  echo "  Stopping running AgentsView Companion instance…"
 
   if command -v osascript &>/dev/null; then
     osascript -e "tell application id \"${BUNDLE_ID}\" to quit" 2>/dev/null || \
-      osascript -e "tell application \"${APP_NAME}\" to quit" 2>/dev/null || \
+      osascript -e "tell application \"${BUNDLE_NAME%.app}\" to quit" 2>/dev/null || \
       true
   fi
 
   if wait_for_app_exit; then
-    info "Stopped running ToTally"
+    info "Stopped running AgentsView Companion"
     return 0
   fi
 
-  warn "ToTally did not quit; killing it…"
+  warn "AgentsView Companion did not quit; killing it…"
   if command -v pkill &>/dev/null; then
     pkill -x "${APP_NAME}" 2>/dev/null || true
   fi
 
   if wait_for_app_exit; then
-    info "Killed running ToTally"
+    info "Killed running AgentsView Companion"
     return 0
   fi
 
-  err "Could not stop running ToTally; aborting install to avoid replacing a live app."
+  err "Could not stop running AgentsView Companion; aborting install to avoid replacing a live app."
   return 1
 }
 
@@ -193,11 +188,11 @@ stop_if_running() {
 # The app's AppSettings.defaultLaunchAtLogin = true causes it to register
 # itself as a login item on first launch via SMAppService.
 launch_app() {
-  echo "  Launching ToTally…"
+  echo "  Launching AgentsView Companion…"
   if open "${INSTALL_DIR}/${BUNDLE_NAME}" 2>/dev/null; then
-    info "ToTally launched"
+    info "AgentsView Companion launched"
   else
-    warn "Could not launch ToTally automatically — open it from /Applications"
+    warn "Could not launch AgentsView Companion automatically — open it from /Applications"
   fi
 }
 

@@ -18,7 +18,7 @@ build:
 	@$(MAKE) -C clients/macos-tray build
 
 test:
-	@pnpm --filter @token-tally/pi-usage-command test
+	@pnpm --filter @agentsview-companion/pi-usage-command test
 	@$(MAKE) -C clients/macos-tray test
 
 check:

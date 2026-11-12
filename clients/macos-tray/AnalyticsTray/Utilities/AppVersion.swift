@@ -55,7 +55,7 @@ enum AppVersion {
     /// ```
     static func diagnosticBlock(serverURL: String) -> String {
         """
-        ToTally — Diagnostic Info
+        AgentsView Companion — Diagnostic Info
         Version:  \(versionAndBuild)
         AgentsView: \(serverURL.isEmpty ? "Automatic discovery" : serverURL)
         macOS:    \(ProcessInfo.processInfo.operatingSystemVersionString)

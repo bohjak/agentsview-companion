@@ -62,7 +62,7 @@ test("only explicit loopback endpoints are accepted", () => {
 });
 
 test("daemon discovery skips bad and stale records and verifies server identity", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "totally-discovery-"));
+  const dir = await mkdtemp(join(tmpdir(), "agentsview-companion-discovery-"));
   try {
     await writeFile(join(dir, "daemon.invalid.json"), "{");
     await writeFile(join(dir, "daemon.malformed.json"), JSON.stringify({ service: "agentsview", network: "tcp", address: "127.0.0.1:8004", pid: 4, started_at: 123 }));

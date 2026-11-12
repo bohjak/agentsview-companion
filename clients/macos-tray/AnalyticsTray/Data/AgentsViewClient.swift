@@ -291,7 +291,7 @@ enum AgentsViewError: LocalizedError {
         case .invalidURL:
             return "Enter an HTTP or HTTPS loopback URL, such as http://127.0.0.1:8080, without credentials or query parameters."
         case .invalidResponse:
-            return "AgentsView returned an unsupported response. Check that the server and ToTally are compatible."
+            return "AgentsView returned an unsupported response. Check that the server and AgentsView Companion are compatible."
         case .http(401), .http(403):
             return "AgentsView requires authentication or denied access. This client currently connects to unauthenticated loopback servers."
         case .http(let code):

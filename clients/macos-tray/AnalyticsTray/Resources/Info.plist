@@ -3,11 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.token-tally.ToTally</string>
+    <string>com.bohjak.agentsview-companion</string>
+    <key>CFBundleExecutable</key>
+    <string>AgentsViewCompanion</string>
     <key>CFBundleName</key>
-    <string>ToTally</string>
+    <string>AgentsView Companion</string>
     <key>CFBundleDisplayName</key>
-    <string>ToTally</string>
+    <string>AgentsView Companion</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>

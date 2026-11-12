@@ -53,7 +53,7 @@ export default function (pi: ExtensionAPI): void {
           notify(renderTab(args.tab, report));
         }
       } catch (error) {
-        notify(`[token-tally:usage] ${String(error)}`, "error");
+        notify(`[agentsview-companion:usage] ${String(error)}`, "error");
       }
     },
   });

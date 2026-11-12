@@ -63,7 +63,7 @@ extension Notification.Name {
     /// changes. `userInfo["title"]` contains the new `String` value.
     /// `StatusItemController` observes this to update the `NSStatusItem` label.
     static let analyticsMenuBarTitleChanged = Notification.Name(
-        "com.token-tally.menuBarTitleChanged"
+        "com.bohjak.agentsview-companion.menuBarTitleChanged"
     )
 }
 
@@ -112,7 +112,7 @@ struct PopoverView: View {
 
     private var headerBar: some View {
         HStack {
-            Text("ToTally")
+            Text("AgentsView Companion")
                 .font(.headline)
             Spacer()
             // Compact spinner alongside the title when a background refresh is
@@ -133,7 +133,7 @@ struct PopoverView: View {
                 Image(systemName: "power")
                     .imageScale(.medium)
             }
-            .help("Quit ToTally")
+            .help("Quit AgentsView Companion")
         }
         .buttonStyle(.plain)
         .font(.caption)

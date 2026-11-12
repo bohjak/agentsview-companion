@@ -49,7 +49,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         // the SwiftUI view hierarchy) alive after the user closes it, so that
         // reopening settings restores the previous scroll position / state.
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "ToTally — Settings"
+        window.title = "AgentsView Companion — Settings"
         // Title, close button, but no miniaturize/zoom/resize handles.
         window.styleMask = [.titled, .closable]
         window.contentMinSize = NSSize(width: 420, height: 500)

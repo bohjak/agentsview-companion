@@ -70,7 +70,7 @@ struct FormatTokensTests {
 @Suite("Formatters.menuBarTitle")
 struct MenuBarTitleTests {
 
-    // ToTally uses Σ (U+03A3, Greek capital sigma) to represent "sum of usage"
+    // AgentsView Companion uses Σ (U+03A3, Greek capital sigma) to represent "sum of usage"
     // across all harnesses. All menu bar title tests must use Σ, not π.
 
     @Test func combined() {

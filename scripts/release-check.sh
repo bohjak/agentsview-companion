@@ -5,8 +5,8 @@ main() {
   local repo_root script
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   cd "${repo_root}"
-  pnpm --filter @token-tally/pi-usage-command typecheck
-  pnpm --filter @token-tally/pi-usage-command test
+  pnpm --filter @agentsview-companion/pi-usage-command typecheck
+  pnpm --filter @agentsview-companion/pi-usage-command test
   for script in scripts/*.sh; do
     bash -n "${script}"
   done
