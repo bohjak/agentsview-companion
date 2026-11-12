@@ -5,6 +5,8 @@ Shows token usage, costs, charts, and top models/projects using its local API—
 separate collection or pricing backend. Settings can exclude cached tokens from
 the display without changing costs.
 
+<img src="assets/screenshot.png" alt="AgentsView Companion menu-bar app showing demo usage data" width="280">
+
 ## Install
 
 Requires macOS 14+ and Xcode Command Line Tools for the app; Pi with Node.js 24+
